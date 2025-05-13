@@ -1,3 +1,6 @@
+"""
+This is just the code I used to download data for a test DEM.
+"""
 import elevation
 from context import _dem_path
 
