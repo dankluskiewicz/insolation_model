@@ -1,0 +1,22 @@
+[project]
+name = "insolation_model"
+dynamic = ["version"]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "rasterio>=1.4",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "mypy>=1.15",
+    "ruff==0.9.7", # the 0.9.9 has a bug
+]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not functional'"  # Exclude functional tests by default
+markers = [
+    "functional",
+]
