@@ -1,8 +1,8 @@
-"""tools to read and manipulate rasters"""
+"""tools to read and manipulate raster."""
 
+from pathlib import Path
 import rasterio
 import numpy as np
-from pathlib import Path
 
 
 class Raster:
@@ -12,6 +12,27 @@ class Raster:
         self.arr = arr
         self.transform = transform
         self.crs = crs
+
+    @property
+    def dx(self) -> float:
+        return self.transform.a
+
+    @property
+    def dy(self) -> float:
+        return self.transform.e
+
+    @property
+    def origin(self) -> np.ndarray:
+        return np.array([self.transform.c, self.transform.f])
+
+    @property
+    def bounds(self) -> tuple[float, float, float, float]:
+        return (
+            self.origin[0],
+            self.origin[0] + self.dx * self.arr.shape[1],
+            self.origin[1] + self.dy * self.arr.shape[0],
+            self.origin[1],
+        )
 
     @classmethod
     def from_tif(cls, path: Path) -> "Raster":

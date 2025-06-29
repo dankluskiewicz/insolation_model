@@ -1,4 +1,4 @@
-"""locate test data"""
+"""locate test data."""
 
 import os
 from pathlib import Path
