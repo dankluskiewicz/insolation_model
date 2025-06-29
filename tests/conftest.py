@@ -1,9 +1,9 @@
 import pytest
-from .test_data.context import _dem_path
 
 from insolation_model.raster import Raster
+from tests.test_data.context import dem_path
 
 
 @pytest.fixture
 def dem():
-    return Raster.from_tif(_dem_path)
+    return Raster.from_tif(dem_path)

@@ -1,3 +1,5 @@
+"""tools to read and manipulate rasters"""
+
 import rasterio
 import numpy as np
 from pathlib import Path
