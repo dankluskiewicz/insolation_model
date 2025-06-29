@@ -27,10 +27,11 @@ class Raster:
 
     @property
     def bounds(self) -> tuple[float, float, float, float]:
+        """xmin, ymin, xmax, ymax."""
         return (
             self.origin[0],
-            self.origin[0] + self.dx * self.arr.shape[1],
             self.origin[1] + self.dy * self.arr.shape[0],
+            self.origin[0] + self.dx * self.arr.shape[1],
             self.origin[1],
         )
 
