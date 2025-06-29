@@ -175,3 +175,6 @@ cython_debug/
 
 # osx
 .DS_Store
+
+# my personal scratch work
+dev/
