@@ -1,4 +1,4 @@
-"""tools to read and manipulate raster."""
+"""tools to read and manipulate rasters."""
 
 import warnings
 from pathlib import Path
