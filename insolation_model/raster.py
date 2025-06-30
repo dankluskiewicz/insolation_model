@@ -1,15 +1,15 @@
 """tools to read and manipulate raster."""
 
+import warnings
 from pathlib import Path
 import rasterio
 from rasterio import warp
 import numpy as np
+import pyproj
 
 
 class Raster:
-    def __init__(
-        self, arr: np.ndarray, transform: rasterio.Affine, crs: str | None = None
-    ):
+    def __init__(self, arr: np.ndarray, transform: rasterio.Affine, crs: pyproj.CRS):
         self.arr = arr
         self.transform = transform
         self.crs = crs
@@ -52,7 +52,7 @@ class Raster:
                 crs=src.crs,
             )
 
-    def reproject(self, new_crs: str, dx=None) -> "Raster":
+    def reproject(self, new_crs: str | pyproj.CRS, dx=None) -> "Raster":
         """Reproject self to a new CRS with similar spatial resolution and coverage."""
         new_transform, new_width, new_height = warp.calculate_default_transform(
             self.crs,
@@ -61,7 +61,7 @@ class Raster:
             self.arr.shape[0],
             *self.bounds,
         )
-
+        new_crs = _make_pyproj_crs(new_crs)
         if new_width is None or new_height is None:
             raise ValueError("Could not calculate new raster dimensions")
 
@@ -78,3 +78,29 @@ class Raster:
         )
 
         return Raster(new_arr, new_transform, new_crs)
+
+    def in_utm(self) -> "Raster":
+        """Reproject self to the most appropriate UTM zone."""
+        utm_zone = _get_utm_zone(self)
+        return self.reproject(utm_zone)
+
+
+def _make_pyproj_crs(crs: str | pyproj.CRS) -> pyproj.CRS:
+    if isinstance(crs, str):
+        return pyproj.CRS.from_user_input(crs)
+    return crs
+
+
+def _get_utm_zone(raster):
+    aoi = pyproj.aoi.AreaOfInterest(
+        west_lon_degree=raster.bounds[0],
+        south_lat_degree=raster.bounds[1],
+        east_lon_degree=raster.bounds[2],
+        north_lat_degree=raster.bounds[3],
+    )
+    utm_crs_list = pyproj.database.query_utm_crs_info(
+        datum_name="WGS 84", area_of_interest=aoi
+    )
+    if len(utm_crs_list) > 2:
+        warnings.warn(f"input raster spans {len(utm_crs_list)} UTM zones")
+    return pyproj.CRS.from_epsg(utm_crs_list[0].code)
