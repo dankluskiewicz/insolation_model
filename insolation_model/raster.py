@@ -63,7 +63,7 @@ class Raster:
         )
 
         if new_width is None or new_height is None:
-            raise ValueError("Could not calculate new rasterdimensions")
+            raise ValueError("Could not calculate new raster dimensions")
 
         new_arr = np.empty((new_height, new_width))
 
