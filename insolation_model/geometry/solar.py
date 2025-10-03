@@ -1,5 +1,5 @@
 """To find solar position as a function of time.
-These are adapted from the equations in the "Solar Equations" PDF in the resources folder.
+These are adapted from equations in the resources folder.
 I chose to ignore time-zone/longitude related complications that are not relevant to seasonal insolation.
 """
 
