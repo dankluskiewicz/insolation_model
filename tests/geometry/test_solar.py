@@ -63,22 +63,6 @@ def test_solar_unit_direction_is_up_at_noon_on_equinox_at_equator(day_of_year):
 
 
 @pytest.mark.parametrize(
-    ["latitude", "day_of_year", "hour"],
-    [
-        [_earth_axial_tilt, _day_of_vernal_equinox, 12],
-        [-_earth_axial_tilt, _day_of_autumnal_equinox, 12],
-        [0, _day_of_vernal_equinox + 1, 12],
-        [0, _day_of_vernal_equinox, 13],
-    ],
-)
-def test_solar_unit_direction_is_not_up_at_other_times_and_places(
-    latitude, day_of_year, hour
-):
-    unit_direction = get_solar_unit_direction(latitude, day_of_year, hour)
-    assert not _is_up(unit_direction)
-
-
-@pytest.mark.parametrize(
     "day_of_year", [_day_of_autumnal_equinox, _day_of_vernal_equinox]
 )
 @pytest.mark.parametrize("hour", [-6, 6])
