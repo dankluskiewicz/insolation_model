@@ -6,13 +6,13 @@ I chose to ignore time-zone/longitude related complications that are not relevan
 import numpy as np
 
 _earth_axial_tilt = 23.44 * np.pi / 180  # in radians
-_day_of_vernal_equinox = 79  # March 20th
+_day_of_winter_solstice = -10  # December 21st
 
 
 def get_fractional_year(day_of_year: int, hour: float) -> float:
     """The fractional year is the fraction of one year since the vernal equinox."""
     return (
-        ((day_of_year - _day_of_vernal_equinox) % 365 + ((hour - 12) / 24)) / 365
+        ((day_of_year - _day_of_winter_solstice) % 365 + ((hour - 12) / 24)) / 365
     ) % 1
 
 
@@ -20,12 +20,12 @@ def get_solar_declination(fractional_year: float) -> float:
     """The solar declination is the angle between the sun and the equator.
 
     Args:
-        fractional_year: time in fraction of one year.
+        fractional_year: time in fraction of one year past the winter equinox.
 
     Returns:
         The solar declination in radians.
     """
-    return _earth_axial_tilt * np.sin(fractional_year * 2 * np.pi)
+    return -_earth_axial_tilt * np.cos(fractional_year * 2 * np.pi)
 
 
 def get_solar_hour_angle(solar_minutes: float) -> float:
@@ -59,16 +59,15 @@ def get_solar_zenith_angle(
 
 
 def get_solar_azimuth(
-    latitude: float, declination: float, solar_hour_angle: float
+    latitude: float, declination: float, zenith_angle: float
 ) -> float:
     """The solar azimuth angle is the angle of the sun clockwise from north.
 
     Args:
         latitude: in degrees.
         declination: in degrees.
-        solar_hour_angle: in degrees.
+        zenith_angle: in radians.
     """
-    zenith_angle = get_solar_zenith_angle(latitude, declination, solar_hour_angle)
     return np.pi + np.arccos(
         (np.sin(latitude * np.pi / 180) * np.cos(zenith_angle) - np.sin(declination))
         / (np.cos(latitude * np.pi / 180) * np.sin(zenith_angle))
@@ -93,5 +92,5 @@ def get_solar_position(
     solar_minutes = hour * 60
     solar_hour_angle = get_solar_hour_angle(solar_minutes)
     zenith_angle = get_solar_zenith_angle(latitude, declination, solar_hour_angle)
-    azimuth_angle = get_solar_azimuth(latitude, declination, solar_hour_angle)
+    azimuth_angle = get_solar_azimuth(latitude, declination, zenith_angle)
     return zenith_angle, azimuth_angle
