@@ -21,6 +21,7 @@ dev-dependencies = [
     "pytest>=8.0",
     "mypy>=1.15",
     "ruff==0.9.7", # the 0.9.9 has a bug
+    "pre-commit>=3.0.0",
     "elevation",
     "matplotlib>=3.8.0",
     "jupyter>=1.1.1",
