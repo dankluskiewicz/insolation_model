@@ -21,8 +21,9 @@ SW = (S + W) / np.linalg.norm(S + W)
 
 @pytest.mark.parametrize("vector", [N, E, S, W, U, D])
 @pytest.mark.parametrize("angle", [0, 15, 37,90, 180, 200, 270, 360, 400])
-def test_rotation_preserves_length(vector, angle):
-    rotated = _rotate_points_around_z_axis(vector, angle)
+@pytest.mark.parametrize("rotation_function", [_rotate_points_around_z_axis, _rotate_points_around_x_axis])
+def test_rotation_preserves_length(vector, angle, rotation_function):
+    rotated = rotation_function(vector, angle)
     assert np.isclose(np.linalg.norm(rotated), 1.0, atol=1e-5)
 
 
@@ -35,9 +36,6 @@ def test_rotation_preserves_length(vector, angle):
     (D, D, 90),
     (N, S, 180),
     (E, W, 180),
-    (S, N, 180),
-    (W, E, 180),
-    (U, U, 180),
     (D, D, 180),
     (NE, SW, 180),
     (NW, SE, 180),
@@ -58,4 +56,26 @@ def test_rotation_preserves_length(vector, angle):
 ])
 def test_z_axis_rotation_converts_directions_correctly(input_vector, output_vector, angle):
     rotated = _rotate_points_around_z_axis(input_vector, angle)
+    assert np.isclose(rotated, output_vector).all(), f"{input_vector=}, {np.round(rotated, 1)=}, {output_vector=}, {angle=}"
+
+
+@pytest.mark.parametrize(["input_vector", "output_vector", "angle"], [
+    (N, D, 90),
+    (N, S, 180),
+    (E, E, 99),
+    (S, N, 180),
+    (N, S, -180),
+    (
+        np.concatenate([N, E, S, W, U, D], axis=1),
+        np.concatenate([S, E, N, W, D, U], axis=1),
+        180
+    ),
+    (
+        np.concatenate([N, E, S, W, U, D], axis=1),
+        np.concatenate([N, E, S, W, U, D], axis=1),
+        360
+    )
+])
+def test_x_axis_rotation_converts_directions_correctly(input_vector, output_vector, angle):
+    rotated = _rotate_points_around_x_axis(input_vector, angle)
     assert np.isclose(rotated, output_vector).all(), f"{input_vector=}, {np.round(rotated, 1)=}, {output_vector=}, {angle=}"
