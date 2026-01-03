@@ -11,7 +11,7 @@ def dem_to_gradient(dem: Raster) -> np.ndarray:
 def dem_to_surface_normal_unit_direction(dem: Raster) -> np.ndarray:
     """Convert a DEM raster to an array of  unit vectors that are perpendicular to the surface."""
     vectorized_gradient_function = np.vectorize(
-        gradient_vector_to_surface_normal_unit_direction
+        _gradient_vector_to_surface_normal_unit_direction
     )
     return np.array(vectorized_gradient_function(*dem_to_gradient(dem)))
 

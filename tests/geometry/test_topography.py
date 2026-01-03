@@ -5,7 +5,7 @@ from insolation_model.raster import Raster
 from insolation_model.geometry.topography import (
     dem_to_gradient,
     dem_to_surface_normal_unit_direction,
-    gradient_vector_to_surface_normal_unit_direction,
+    _gradient_vector_to_surface_normal_unit_direction,
 )
 
 
@@ -39,7 +39,7 @@ def test_gradient_vector_to_surface_normal_unit_direction(
     prescribed_grad_x, prescribed_grad_y
 ):
     unit_norm = np.array(
-        gradient_vector_to_surface_normal_unit_direction(
+        _gradient_vector_to_surface_normal_unit_direction(
             prescribed_grad_x, prescribed_grad_y
         )
     )
