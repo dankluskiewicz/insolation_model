@@ -66,7 +66,9 @@ def test_solar_unit_direction_is_up_at_noon_on_equinox_at_equator(day_of_year):
     "day_of_year", [_day_of_autumnal_equinox, _day_of_vernal_equinox]
 )
 @pytest.mark.parametrize("hour", [-6, 6])
-def test_solar_unit_direction_is_horizontal_at_morning_and_night_at_equator(day_of_year, hour):
+def test_solar_unit_direction_is_horizontal_at_morning_and_night_at_equator(
+    day_of_year, hour
+):
     latitude = 0
     unit_direction = get_solar_unit_direction(latitude, day_of_year, hour)
     assert np.isclose(unit_direction[2], 0.0, atol=1e-5)
@@ -74,19 +76,27 @@ def test_solar_unit_direction_is_horizontal_at_morning_and_night_at_equator(day_
 
 
 @pytest.mark.parametrize("latitude", [90, -90])
-@pytest.mark.parametrize("day_of_year", [_day_of_autumnal_equinox, _day_of_vernal_equinox])
+@pytest.mark.parametrize(
+    "day_of_year", [_day_of_autumnal_equinox, _day_of_vernal_equinox]
+)
 @pytest.mark.parametrize("hour", [0, 2, 3, 15, 24])
-def test_solar_unit_direction_is_horizontal_at_poles_during_equinoxes(latitude, day_of_year, hour):
+def test_solar_unit_direction_is_horizontal_at_poles_during_equinoxes(
+    latitude, day_of_year, hour
+):
     unit_direction = get_solar_unit_direction(latitude, day_of_year, hour)
     assert np.isclose(unit_direction[2], 0.0, atol=1e-2), unit_direction
 
 
-
-@pytest.mark.parametrize(["day_of_year", "latitude"], [
-    [_day_of_winter_solstice, -_earth_axial_tilt],
-    [_day_of_summer_solstice, _earth_axial_tilt],
-])
-def test_solar_unit_direction_is_up_at_noon_on_solstice_at_tropics(day_of_year, latitude):
+@pytest.mark.parametrize(
+    ["day_of_year", "latitude"],
+    [
+        [_day_of_winter_solstice, -_earth_axial_tilt],
+        [_day_of_summer_solstice, _earth_axial_tilt],
+    ],
+)
+def test_solar_unit_direction_is_up_at_noon_on_solstice_at_tropics(
+    day_of_year, latitude
+):
     hour = 12
     unit_direction = get_solar_unit_direction(latitude, day_of_year, hour)
     assert _is_up(unit_direction)
