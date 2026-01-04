@@ -1,25 +1,11 @@
 import pytest
 import numpy as np
-import rasterio
-from insolation_model.raster import Raster
 from insolation_model.geometry.topography import (
     dem_to_gradient,
     dem_to_surface_normal_unit_direction,
     _gradient_vector_to_surface_normal_unit_direction,
 )
-
-
-def make_dem_with_gradients(grad_x, grad_y, dx, dy):
-    N, M = 4, 5
-    transform = rasterio.Affine(dx, 0, 0, 0, dy, 0)
-    return Raster(
-        arr=(
-            np.vstack([np.arange(M)] * N) * grad_x * dx
-            + np.vstack([np.arange(N)] * M).transpose() * grad_y * dy
-        ),
-        transform=transform,
-        crs=rasterio.crs.CRS.from_epsg(4326),
-    )
+from tests.conftest import make_dem_with_gradients
 
 
 @pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
