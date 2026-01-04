@@ -16,22 +16,32 @@ def _rad(degrees: float) -> float:
 
 
 def _point_representation_of_dem(dem: Raster) -> np.ndarray:
-    """Convert a DEM to a point representation
-    The representation is like [X, Y, Z], where each of X, Y, and Z is a 1D array whose length is the number of cells in the dem grid.
-    Each (X[i], Y[i], Z[i]) represents a point on the surface of the dem.
+    """Create a point representation of a DEM.
+    The representation XYZ is an arrary of shape (3, N) like [X, Y, Z],
+    where each of X, Y, and Z is a 1D array whose length is the number of cells in the dem grid.
     """
     X = np.vstack(
-        [dem.transform.c + dem.dx * np.arange(dem.arr.shape[1])] * dem.arr.shape[0]
+        [dem.transform.c + dem.dx * (np.arange(dem.arr.shape[1]) + 0.5)]
+        * dem.arr.shape[0]
     )
     Y = np.vstack(
-        [dem.transform.f + dem.dy * np.arange(dem.arr.shape[0])] * dem.arr.shape[1]
+        [dem.transform.f + dem.dy * (np.arange(dem.arr.shape[0]) + 0.5)]
+        * dem.arr.shape[1]
     ).transpose()
     Z = dem.arr
     return np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=0)
 
 
 def _rotate_points_around_z_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate points XYZ counterclockwise around the z-axis."""
+    """Rotate points XYZ counterclockwise around the z-axis.
+
+    Args:
+        XYZ: Array of shape (3, N) where columns are [X, Y, Z]
+        angle: Angle in degrees to rotate counterclockwise around the z-axis
+
+    Returns:
+        Array of shape (3, N) where columns are the rotated [X, Y, Z]
+    """
     rotation_matrix = np.array(
         [
             [np.cos(_rad(angle)), -np.sin(_rad(angle)), 0],
@@ -43,7 +53,15 @@ def _rotate_points_around_z_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
 
 
 def _rotate_points_around_x_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate points XYZ counterclockwise around the x-axis."""
+    """Rotate points XYZ counterclockwise around the x-axis.
+
+    Args:
+        XYZ: Array of shape (3, N) where columns are [X, Y, Z]
+        angle: Angle in degrees to rotate counterclockwise around the x-axis
+
+    Returns:
+        Array of shape (3, N) where columns are the rotated [X, Y, Z]
+    """
     rotation_matrix = np.array(
         [
             [1, 0, 0],
@@ -52,3 +70,61 @@ def _rotate_points_around_x_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
         ]
     )
     return np.dot(rotation_matrix, XYZ)
+
+
+def _raster_representation_of_points_max_z(
+    XYZ: np.ndarray,
+    dx: float,
+    dy: float,
+    crs: pyproj.CRS | None = None,
+) -> Raster:
+    """Convert a 3D array of XYZ points to a Raster using max Z values per cell.
+
+    Args:
+        XYZ: Array of shape (3, N) where columns are [X, Y, Z]
+        dx: Grid cell spacing in X direction
+        dy: Grid cell spacing in Y direction
+        crs: Coordinate reference system. Defaults to None because crs isn't relevant to the
+            application of this helper function.
+
+    Returns:
+        Raster with array values being the maximum Z value for each grid cell.
+        Cells with no points will have NaN values.
+    """
+    X, Y, Z = XYZ[0, :], XYZ[1, :], XYZ[2, :]
+
+    x_min, x_max = np.min(X), np.max(X)
+    y_min, y_max = np.min(Y), np.max(Y)
+    n_cols = int(np.ceil((x_max - x_min) / dx)) + 1
+    n_rows = int(np.ceil((y_max - y_min) / np.abs(dy))) + 1
+
+    col_indices = np.floor((X - x_min) / dx).astype(int)
+    row_indices = np.floor((Y - y_min) / np.abs(dy)).astype(int)
+    # Saturate indices to valid range
+    col_indices = np.clip(col_indices, 0, n_cols - 1)
+    row_indices = np.clip(row_indices, 0, n_rows - 1)
+    flat_indices = row_indices * n_cols + col_indices
+
+    raster_arr = np.full((n_rows, n_cols), np.nan)
+
+    # Use a more efficient approach: sort by index, then group and take max
+    # This avoids the loop and is much faster for large datasets
+    sort_idx = np.argsort(flat_indices)
+    sorted_indices = flat_indices[sort_idx]
+    sorted_Z = Z[sort_idx]
+
+    # Find where indices change (group boundaries)
+    diff = np.diff(sorted_indices)
+    group_starts = np.concatenate(([0], np.where(diff > 0)[0] + 1))
+    group_ends = np.concatenate((group_starts[1:], [len(sorted_indices)]))
+
+    # Compute max for each group
+    for start, end in zip(group_starts, group_ends):
+        idx = sorted_indices[start]
+        row = idx // n_cols
+        col = idx % n_cols
+        raster_arr[row, col] = np.max(sorted_Z[start:end])
+
+    transform = rasterio.Affine(dx, 0.0, x_min, 0.0, dy, y_max)
+
+    return Raster(arr=raster_arr, transform=transform, crs=crs)
