@@ -4,7 +4,7 @@ from ..raster import Raster
 
 
 def dem_to_gradient(dem: Raster) -> np.ndarray:
-    grad_y, grad_x = np.gradient(dem.arr, dem.dy, dem.dx)
+    grad_y, grad_x = np.gradient(dem.arr, -dem.dy, dem.dx)
     return np.stack([grad_x, grad_y])
 
 

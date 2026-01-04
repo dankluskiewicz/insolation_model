@@ -2,12 +2,10 @@ import numpy as np
 import rasterio
 import pyproj
 from ..raster import Raster
-from .topography import dem_to_surface_normal_unit_direction
 
 
 def get_shading_factor(dem: Raster) -> Raster:
     """Get the shading factor for a DEM."""
-    surface_normal_unit_direction = dem_to_surface_normal_unit_direction(dem)
     ...
 
 
@@ -25,7 +23,7 @@ def _point_representation_of_dem(dem: Raster) -> np.ndarray:
         * dem.arr.shape[0]
     )
     Y = np.vstack(
-        [dem.transform.f + dem.dy * (np.arange(dem.arr.shape[0]) + 0.5)]
+        [dem.transform.f - dem.dy * (np.arange(dem.arr.shape[0]) + 0.5)]
         * dem.arr.shape[1]
     ).transpose()
     Z = dem.arr
@@ -93,13 +91,16 @@ def _raster_representation_of_points_max_z(
     """
     X, Y, Z = XYZ[0, :], XYZ[1, :], XYZ[2, :]
 
-    x_min, x_max = np.min(X), np.max(X)
-    y_min, y_max = np.min(Y), np.max(Y)
+    # Add half a cell to the min and max to ensure the raster covers the points
+    # The half-cell buffer will also make it possibole to recover the
+    # oringinal raster in a raster -> points -> raster round trip.
+    x_min, x_max = np.min(X) - dx / 2, np.max(X) + dx / 2
+    y_min, y_max = np.min(Y) - dy / 2, np.max(Y) + dy / 2
     n_cols = int(np.ceil((x_max - x_min) / dx)) + 1
-    n_rows = int(np.ceil((y_max - y_min) / np.abs(dy))) + 1
+    n_rows = int(np.ceil((y_max - y_min) / dy)) + 1
 
     col_indices = np.floor((X - x_min) / dx).astype(int)
-    row_indices = np.floor((Y - y_min) / np.abs(dy)).astype(int)
+    row_indices = np.floor((y_max - Y) / dy).astype(int)
     # Saturate indices to valid range
     col_indices = np.clip(col_indices, 0, n_cols - 1)
     row_indices = np.clip(row_indices, 0, n_rows - 1)
@@ -125,6 +126,6 @@ def _raster_representation_of_points_max_z(
         col = idx % n_cols
         raster_arr[row, col] = np.max(sorted_Z[start:end])
 
-    transform = rasterio.Affine(dx, 0.0, x_min, 0.0, dy, y_max)
+    transform = rasterio.Affine(dx, 0.0, x_min, 0.0, -dy, y_max)
 
     return Raster(arr=raster_arr, transform=transform, crs=crs)
