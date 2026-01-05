@@ -59,13 +59,15 @@ def make_dem_with_step(
     dem = make_flat_dem(dx, dy, n_rows, n_cols, origin_x, origin_y)
     step_length = stop_index - start_index
     if step_axis == 0:
-        dem.arr[start_index:stop_index, :] += (
-            step_size * np.arange(step_length) / step_length
+        dem.arr[start_index:stop_index, :] += np.stack(
+            [step_size * np.arange(1, step_length + 1) / step_length] * n_cols,
+            axis=1,
         )
         dem.arr[stop_index:, :] = step_size
     elif step_axis == 1:
-        dem.arr[:, start_index:stop_index] += (
-            step_size * np.arange(step_length) / step_length
+        dem.arr[:, start_index:stop_index] += np.stack(
+            [step_size * np.arange(1, step_length + 1) / step_length] * n_rows,
+            axis=0,
         )
         dem.arr[:, stop_index:] = step_size
     return dem

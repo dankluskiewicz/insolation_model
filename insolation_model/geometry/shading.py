@@ -2,6 +2,7 @@ import numpy as np
 import rasterio
 import pyproj
 from ..raster import Raster
+from .topography import dem_to_gradient
 
 
 def get_shading_factor(dem: Raster) -> Raster:
@@ -129,3 +130,19 @@ def _gradient_from_elevation_angle(elevation_angle: float) -> float:
     """
     assert 0 <= elevation_angle < 90, "Elevation angle must be in [0, 90) degrees"
     return np.tan(_rad(elevation_angle))
+
+
+def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
+    """Create a mask showing what cells would be shaded by as sun at the north horizon.
+    The mask is true for shaded cells.
+    """
+    _, grad_y = dem_to_gradient(dem)
+    mask = np.zeros(dem.arr.shape, dtype=bool)
+    n_rows, _ = dem.arr.shape
+    cumulative_max_elevation = dem.arr[0, :]
+    for row_num in range(1, n_rows):
+        row_elevations = dem.arr[row_num, :]
+        cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
+        mask[row_num, row_elevations < cumulative_max_elevation] = True
+    mask[grad_y > 0] = True  # South facing slope will be shaded
+    return mask
