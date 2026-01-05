@@ -50,26 +50,6 @@ def _rotate_points_around_z_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
     return np.dot(rotation_matrix, XYZ)
 
 
-def _rotate_points_around_x_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate points XYZ counterclockwise around the x-axis.
-
-    Args:
-        XYZ: Array of shape (3, N) where columns are [X, Y, Z]
-        angle: Angle in degrees to rotate counterclockwise around the x-axis
-
-    Returns:
-        Array of shape (3, N) where columns are the rotated [X, Y, Z]
-    """
-    rotation_matrix = np.array(
-        [
-            [1, 0, 0],
-            [0, np.cos(_rad(angle)), np.sin(_rad(angle))],
-            [0, -np.sin(_rad(angle)), np.cos(_rad(angle))],
-        ]
-    )
-    return np.dot(rotation_matrix, XYZ)
-
-
 def _raster_representation_of_points_max_z(
     XYZ: np.ndarray,
     dx: float,
