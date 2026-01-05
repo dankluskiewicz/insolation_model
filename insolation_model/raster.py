@@ -84,6 +84,9 @@ class Raster:
         utm_zone = _get_utm_zone(self)
         return self.reproject(utm_zone)
 
+    def copy(self: "Raster") -> "Raster":
+        return Raster(self.arr.copy(), self.transform, self.crs)
+
 
 def _make_pyproj_crs(crs: str | pyproj.CRS) -> pyproj.CRS:
     if isinstance(crs, str):
