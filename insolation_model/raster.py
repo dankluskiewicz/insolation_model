@@ -10,7 +10,7 @@ import pyproj
 
 class Raster:
     def __init__(self, arr: np.ndarray, transform: rasterio.Affine, crs: pyproj.CRS):
-        self.arr = arr
+        self.arr = arr.astype(float)
         self.transform = transform
         self.crs = crs
 
