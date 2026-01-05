@@ -109,3 +109,23 @@ def _raster_representation_of_points_max_z(
     transform = rasterio.Affine(dx, 0.0, x_min, 0.0, -dy, y_max)
 
     return Raster(arr=raster_arr, transform=transform, crs=crs)
+
+
+def _add_y_gradient(dem: Raster, gradient: float) -> Raster:
+    """Add a y-gradient to a DEM."""
+    new_dem = dem.copy()
+    n_rows, n_cols = new_dem.arr.shape
+    new_dem.arr -= (
+        np.vstack([np.arange(n_rows)] * n_cols).transpose().astype(float)
+        * gradient
+        * new_dem.dy
+    )
+    return new_dem
+
+
+def _gradient_from_elevation_angle(elevation_angle: float) -> float:
+    """Get the gradient of a slope that parallels an elevation angle.
+    Avoid infinity at 90 degrees——will need to handle 90-degree case elsewhere.
+    """
+    assert 0 <= elevation_angle < 90, "Elevation angle must be in [0, 90) degrees"
+    return np.tan(_rad(elevation_angle))
