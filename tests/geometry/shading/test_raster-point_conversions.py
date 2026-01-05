@@ -1,6 +1,14 @@
+import functools
+import pytest
+
 import numpy as np
-from insolation_model.geometry.shading import _point_representation_of_dem
-from tests.conftest import make_dem_with_gradients
+
+from insolation_model.geometry.shading import (
+    _point_representation_of_dem,
+    _unflatten_vector_to_raster_dimensions,
+    _rotate_points_around_z_axis,
+)
+from tests.conftest import make_dem_with_gradients, make_flat_dem, make_dem_with_step
 
 
 def test_points_represent_cell_centers_and_values():
@@ -35,3 +43,80 @@ def test_points_represent_cell_centers_and_values():
     np.testing.assert_array_almost_equal(
         Z, expected_Z, err_msg="Points should represent cell values"
     )
+
+
+@pytest.mark.parametrize("dx", [1, 2])
+@pytest.mark.parametrize("dy", [1, 2])
+@pytest.mark.parametrize("n_rows", [3, 8])
+@pytest.mark.parametrize("n_cols", [3, 4, 9])
+@pytest.mark.parametrize("origin_x", [0, 10])
+@pytest.mark.parametrize("origin_y", [0, -10])
+@pytest.mark.parametrize(
+    "dem_factory",
+    [
+        make_flat_dem,
+        functools.partial(make_dem_with_gradients, grad_x=1, grad_y=2),
+        functools.partial(make_dem_with_step, step_size=1, start_index=1, stop_index=3),
+        functools.partial(
+            make_dem_with_step, step_size=-1, start_index=1, stop_index=3, step_axis=1
+        ),
+    ],
+)
+def test_raster_point_round_trip(
+    dx, dy, n_rows, n_cols, origin_x, origin_y, dem_factory
+):
+    # make sure that I can get back the values from a raster after converting to points and back
+    dem = dem_factory(
+        dx=dx,
+        dy=dy,
+        n_rows=n_rows,
+        n_cols=n_cols,
+        origin_x=origin_x,
+        origin_y=origin_y,
+    )
+    _X, _Y, Z = _point_representation_of_dem(dem)
+    unflattened_Z = _unflatten_vector_to_raster_dimensions(Z, n_rows, n_cols)
+    np.testing.assert_array_almost_equal(unflattened_Z, dem.arr)
+
+
+@pytest.mark.parametrize("dx", [1, 2])
+@pytest.mark.parametrize("dy", [1, 2])
+@pytest.mark.parametrize("n_rows", [3, 8])
+@pytest.mark.parametrize("n_cols", [3, 4, 9])
+@pytest.mark.parametrize("origin_x", [0, 10])
+@pytest.mark.parametrize("origin_y", [0, -10])
+@pytest.mark.parametrize(
+    "dem_factory",
+    [
+        make_flat_dem,
+        functools.partial(make_dem_with_gradients, grad_x=1, grad_y=2),
+        functools.partial(make_dem_with_step, step_size=1, start_index=1, stop_index=3),
+        functools.partial(
+            make_dem_with_step, step_size=-1, start_index=1, stop_index=3, step_axis=1
+        ),
+    ],
+)
+@pytest.mark.parametrize("rotation_angle", [0, 15, 37, 90, 180, 211])
+def test_raster_point_round_trip_with_rotation(
+    dx, dy, n_rows, n_cols, origin_x, origin_y, dem_factory, rotation_angle
+):
+    dem = dem_factory(
+        dx=dx,
+        dy=dy,
+        n_rows=n_rows,
+        n_cols=n_cols,
+        origin_x=origin_x,
+        origin_y=origin_y,
+    )
+    X, Y, Z = _point_representation_of_dem(dem)
+    rotated_XYZ = _rotate_points_around_z_axis(
+        np.stack([X, Y, Z], axis=0), rotation_angle
+    )
+    unrotated_X, unrotated_Y, unrotated_Z = _rotate_points_around_z_axis(
+        rotated_XYZ, -rotation_angle
+    )
+    np.testing.assert_array_almost_equal(unrotated_X, X)
+    np.testing.assert_array_almost_equal(unrotated_Y, Y)
+    np.testing.assert_array_almost_equal(unrotated_Z, Z)
+    unflattened_Z = _unflatten_vector_to_raster_dimensions(unrotated_Z, n_rows, n_cols)
+    np.testing.assert_array_almost_equal(unflattened_Z, dem.arr)

@@ -5,13 +5,38 @@ from ..raster import Raster
 from .topography import dem_to_gradient
 
 
-def get_shading_factor(dem: Raster) -> Raster:
-    """Get the shading factor for a DEM."""
-    ...
+def get_shading_mask(
+    dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
+) -> Raster:
+    """Get the shading mask for a DEM, given a solar position.
+    The solar position is defined by the solar azimuth angle and elevation angle.
+    The azimuth angle is the angle between the sun and the north direction.
+    The elevation angle is the angle between the sun and the horizon.
+    """
+    dem_points = _point_representation_of_dem(dem)
+    rotated_dem_points = _rotate_points_around_z_axis(dem_points, solar_azimuth_angle)
+    rotated_dem = _raster_representation_of_points_max_z(
+        rotated_dem_points, dem.dx, dem.dy
+    )
+    rotated_mask = _shading_mask_from_sun_at_north_horizon(
+        _add_y_gradient(
+            rotated_dem, _gradient_from_elevation_angle(solar_elevation_angle)
+        )
+    )
+    point_mask = _raster_values_at_points(
+        rotated_mask, rotated_dem_points[0, :], rotated_dem_points[1, :]
+    )
+    return _unflatten_vector_to_raster_dimensions(
+        point_mask, dem.arr.shape[0], dem.arr.shape[1]
+    )
 
 
 def _rad(degrees: float) -> float:
     return degrees * np.pi / 180
+
+
+def _fill_nans(arr: np.ndarray, value: float) -> np.ndarray:
+    return np.where(np.isnan(arr), value, arr)
 
 
 def _point_representation_of_dem(dem: Raster) -> np.ndarray:
@@ -35,11 +60,11 @@ def _rotate_points_around_z_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
     """Rotate points XYZ counterclockwise around the z-axis.
 
     Args:
-        XYZ: Array of shape (3, N) where columns are [X, Y, Z]
+        XYZ: Array of shape (3, N) where rows are [X, Y, Z]
         angle: Angle in degrees to rotate counterclockwise around the z-axis
 
     Returns:
-        Array of shape (3, N) where columns are the rotated [X, Y, Z]
+        Array of shape (3, N) where rows are the rotated [X, Y, Z]
     """
     rotation_matrix = np.array(
         [
@@ -60,7 +85,7 @@ def _raster_representation_of_points_max_z(
     """Convert a 3D array of XYZ points to a Raster using max Z values per cell.
 
     Args:
-        XYZ: Array of shape (3, N) where columns are [X, Y, Z]
+        XYZ: Array of shape (3, N) where rows are [X, Y, Z]
         dx: Grid cell spacing in X direction
         dy: Grid cell spacing in Y direction
         crs: Coordinate reference system. Defaults to None because crs isn't relevant to the
@@ -74,7 +99,7 @@ def _raster_representation_of_points_max_z(
 
     # Add half a cell to the min and max to ensure the raster covers the points
     # The half-cell buffer will also make it possibole to recover the
-    # oringinal raster in a raster -> points -> raster round trip.
+    # oringinal raster in a [raster -> points -> raster] round trip.
     x_min, x_max = np.min(X) - dx / 2, np.max(X) + dx / 2
     y_min, y_max = np.min(Y) - dy / 2, np.max(Y) + dy / 2
     n_cols = int(np.ceil((x_max - x_min) / dx)) + 1
@@ -139,10 +164,34 @@ def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
     _, grad_y = dem_to_gradient(dem)
     mask = np.zeros(dem.arr.shape, dtype=bool)
     n_rows, _ = dem.arr.shape
-    cumulative_max_elevation = dem.arr[0, :]
+    cumulative_max_elevation = _fill_nans(dem.arr[0, :], -np.inf)
     for row_num in range(1, n_rows):
-        row_elevations = dem.arr[row_num, :]
+        row_elevations = _fill_nans(dem.arr[row_num, :], -np.inf)
         cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
         mask[row_num, row_elevations < cumulative_max_elevation] = True
     mask[grad_y > 0] = True  # South facing slope will be shaded
     return mask
+
+
+def _raster_values_at_points(
+    raster: Raster, X: np.ndarray, Y: np.ndarray
+) -> np.ndarray:
+    """Get the values of a raster at points [X, Y].
+
+    Args:
+        raster: Raster
+        X: array of shape (N,) where the i-th element is the X coordinate of the i-th point
+        Y: array of shape (N,) where the i-th element is the Y coordinate of the i-th point
+    Returns:
+        Array of shape (N,) where the i-th element is the value of the raster at the point [X[i], Y[i]]
+    """
+    col_indices = np.floor((X - raster.transform.c) / raster.dx).astype(int)
+    row_indices = np.floor((Y - raster.transform.f) / (-raster.dy)).astype(int)
+    return raster.arr[row_indices, col_indices]
+
+
+def _unflatten_vector_to_raster_dimensions(
+    vector: np.ndarray, n_rows: int, n_cols: int
+) -> np.ndarray:
+    """Unflatten a vector to match the dimensions of a raster."""
+    return vector.reshape(n_rows, n_cols)
