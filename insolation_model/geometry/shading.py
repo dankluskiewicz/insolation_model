@@ -114,8 +114,7 @@ def _raster_representation_of_points_max_z(
 
     raster_arr = np.full((n_rows, n_cols), np.nan)
 
-    # Use a more efficient approach: sort by index, then group and take max
-    # This avoids the loop and is much faster for large datasets
+    # TODO: review this algorithm
     sort_idx = np.argsort(flat_indices)
     sorted_indices = flat_indices[sort_idx]
     sorted_Z = Z[sort_idx]
@@ -170,7 +169,7 @@ def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
         cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
         mask[row_num, row_elevations < cumulative_max_elevation] = True
     mask[grad_y > 0] = True  # South facing slope will be shaded
-    return mask
+    return dem.with_array(mask)
 
 
 def _raster_values_at_points(

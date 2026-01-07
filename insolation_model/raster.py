@@ -87,6 +87,9 @@ class Raster:
     def copy(self: "Raster") -> "Raster":
         return Raster(self.arr.copy(), self.transform, self.crs)
 
+    def with_array(self, arr: np.ndarray) -> "Raster":
+        return Raster(arr, self.transform, self.crs)
+
 
 def _make_pyproj_crs(crs: str | pyproj.CRS) -> pyproj.CRS:
     if isinstance(crs, str):
