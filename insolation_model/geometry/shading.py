@@ -7,11 +7,12 @@ from .topography import dem_to_gradient
 
 def get_shading_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
-) -> Raster:
+) -> np.ndarray:
     """Get the shading mask for a DEM, given a solar position.
     The solar position is defined by the solar azimuth angle and elevation angle.
-    The azimuth angle is the angle between the sun and the north direction.
+    The azimuth angle is the counterclockwise angle between the sun and the north direction.
     The elevation angle is the angle between the sun and the horizon.
+    The mask is 1 for shaded cells.
     """
     dem_points = _point_representation_of_dem(dem)
     rotated_dem_points = _rotate_points_around_z_axis(dem_points, solar_azimuth_angle)
@@ -153,22 +154,22 @@ def _gradient_from_elevation_angle(elevation_angle: float) -> float:
     Avoid infinity at 90 degrees——will need to handle 90-degree case elsewhere.
     """
     assert 0 <= elevation_angle < 90, "Elevation angle must be in [0, 90) degrees"
-    return np.tan(_rad(elevation_angle))
+    return -np.tan(_rad(elevation_angle))
 
 
 def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
     """Create a mask showing what cells would be shaded by as sun at the north horizon.
-    The mask is true for shaded cells.
+    The mask is 1 for shaded cells.
     """
     _, grad_y = dem_to_gradient(dem)
-    mask = np.zeros(dem.arr.shape, dtype=bool)
+    mask = np.zeros(dem.arr.shape, dtype=int)
     n_rows, _ = dem.arr.shape
     cumulative_max_elevation = _fill_nans(dem.arr[0, :], -np.inf)
     for row_num in range(1, n_rows):
         row_elevations = _fill_nans(dem.arr[row_num, :], -np.inf)
         cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
-        mask[row_num, row_elevations < cumulative_max_elevation] = True
-    mask[grad_y > 0] = True  # South facing slope will be shaded
+        mask[row_num, row_elevations < cumulative_max_elevation] = 1
+    mask[grad_y > 0] = 1  # South facing slope will be shaded
     return dem.with_array(mask)
 
 
