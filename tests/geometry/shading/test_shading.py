@@ -98,7 +98,6 @@ def _gradient_for_slope_that_parallels_solar_elevation(
         raise ValueError("Elevation angle must be less than 90")
     grad_x = np.sin(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
     grad_y = np.cos(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
-    assert np.isclose(np.sqrt(grad_x**2 + grad_y**2), np.tan(_rad(elevation_angle)))
     return grad_x, grad_y
 
 
