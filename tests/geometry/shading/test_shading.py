@@ -51,14 +51,24 @@ def test_shading_mask_from_sun_at_north_horizon_with_step(
     np.testing.assert_array_equal(mask.arr, expected_mask)
 
 
-@pytest.mark.parametrize("elevation_angle", [3, 15, 37, 89])
-@pytest.mark.parametrize("azimuth_angle", [0, 15, 90, 165])
+@pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
+@pytest.mark.parametrize("elevation_angle", [0, 30, 90])
+def test_flat_slope_never_shaded(azimuth_angle, elevation_angle):
+    dem = make_flat_dem(1, 1)
+    mask = get_shading_mask(
+        dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=elevation_angle
+    )
+    np.testing.assert_array_equal(mask, np.zeros(dem.arr.shape, dtype=int))
+
+
+@pytest.mark.parametrize("elevation_angle", [3, 15, 37, 87])
+@pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270, 1, 45, 15, 75, 265])
 def test_get_shading_mask(elevation_angle, azimuth_angle):
-    eps = 2
-    should_be_shaded = _dem_for_slope_that_parallels_solar_elevation(
+    eps = 1
+    should_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
         elevation_angle + eps, azimuth_angle, 1, 1
     )
-    should_not_be_shaded = _dem_for_slope_that_parallels_solar_elevation(
+    should_not_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
         elevation_angle - eps, azimuth_angle, 1, 1
     )
     np.testing.assert_array_equal(
@@ -79,16 +89,6 @@ def test_get_shading_mask(elevation_angle, azimuth_angle):
     )
 
 
-@pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
-@pytest.mark.parametrize("elevation_angle", [0.0001, 5, 30, 90])
-def test_flat_slope_never_shaded(azimuth_angle, elevation_angle):
-    dem = make_flat_dem(1, 1)
-    mask = get_shading_mask(
-        dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=elevation_angle
-    )
-    np.testing.assert_array_equal(mask, np.zeros(dem.arr.shape, dtype=int))
-
-
 def _gradient_for_slope_that_parallels_solar_elevation(
     elevation_angle: float, azimuth_angle: float
 ) -> float:
@@ -96,22 +96,13 @@ def _gradient_for_slope_that_parallels_solar_elevation(
         raise ValueError("Elevation angle must be greater than 0")
     if elevation_angle >= 90:
         raise ValueError("Elevation angle must be less than 90")
-    solar_unit_direction = np.array(
-        [
-            np.cos(_rad(elevation_angle)) * np.sin(_rad(azimuth_angle)),
-            np.cos(_rad(elevation_angle)) * np.cos(_rad(azimuth_angle)),
-            np.sin(_rad(elevation_angle)),
-        ]
-    )
-    # gradient is cross product of solar unit direction and a flat vector orthogonal to the solar azimuth
-    grad_x, grad_y, _ = np.cross(
-        solar_unit_direction,
-        np.array([np.cos(_rad(azimuth_angle)), np.sin(_rad(azimuth_angle)), 0]),
-    )
+    grad_x = np.sin(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
+    grad_y = np.cos(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
+    assert np.isclose(np.sqrt(grad_x**2 + grad_y**2), np.tan(_rad(elevation_angle)))
     return grad_x, grad_y
 
 
-def _dem_for_slope_that_parallels_solar_elevation(
+def _dem_with_slope_that_parallels_solar_elevation(
     elevation_angle: float,
     azimuth_angle: float,
     dx: float,

@@ -14,6 +14,8 @@ def get_shading_mask(
     The elevation angle is the angle between the sun and the horizon.
     The mask is 1 for shaded cells.
     """
+    if solar_elevation_angle == 90:
+        return np.zeros(dem.arr.shape, dtype=int)
     dem_points = _point_representation_of_dem(dem)
     rotated_dem_points = _rotate_points_around_z_axis(dem_points, solar_azimuth_angle)
     rotated_dem = _raster_representation_of_points_max_z(
