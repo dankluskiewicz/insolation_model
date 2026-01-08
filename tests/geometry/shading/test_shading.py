@@ -61,6 +61,22 @@ def test_flat_slope_never_shaded(azimuth_angle, elevation_angle):
     np.testing.assert_array_equal(mask, np.zeros(dem.arr.shape, dtype=int))
 
 
+@pytest.mark.parametrize(("grad_x", "grad_y"), [(0, 1), (1, 4)])
+@pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
+def test_dem_is_never_masked_when_solar_elevation_angle_is_90(
+    grad_x, grad_y, azimuth_angle
+):
+    dem = make_dem_with_gradients(
+        grad_x, grad_y, 1, 1, n_rows=4, n_cols=5, origin_x=0, origin_y=0
+    )
+    np.testing.assert_array_equal(
+        get_shading_mask(
+            dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=90
+        ),
+        np.zeros(dem.arr.shape, dtype=int),
+    )
+
+
 @pytest.mark.parametrize("elevation_angle", [3, 15, 37, 87])
 @pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270, 1, 45, 15, 75, 265])
 def test_get_shading_mask(elevation_angle, azimuth_angle):
