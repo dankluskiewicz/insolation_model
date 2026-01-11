@@ -266,3 +266,20 @@ def _double_resolution_of_array(arr: np.ndarray) -> np.ndarray:
     result[1::2, 1::2][-1, -1] = arr[-1, -1]
 
     return result
+
+
+def _double_resolution_of_raster(raster: Raster) -> Raster:
+    """Double the resolution of a raster."""
+    new_transform = rasterio.Affine(
+        raster.dx / 2,
+        0.0,
+        raster.origin[0],
+        0.0,
+        -raster.dy / 2,
+        raster.origin[1],
+    )
+    return Raster(
+        arr=_double_resolution_of_array(raster.arr),
+        transform=new_transform,
+        crs=raster.crs,
+    )
