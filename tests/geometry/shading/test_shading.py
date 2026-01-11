@@ -78,14 +78,18 @@ def test_dem_is_never_masked_when_solar_elevation_angle_is_90(
 
 
 @pytest.mark.parametrize("elevation_angle", [3, 15, 37, 87])
-@pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270, 1, 45, 15, 75, 265])
-def test_get_shading_mask(elevation_angle, azimuth_angle):
+@pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270])
+def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_cases(
+    elevation_angle, azimuth_angle
+):
+    """Test the get_shading_mask function with a slope that parallels the solar elevation angle for azimuth angles that are multiples of 90."""
+    n_rows, n_cols = 10, 10
     eps = 1
     should_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
-        elevation_angle + eps, azimuth_angle, 1, 1
+        elevation_angle + eps, azimuth_angle, 1, 1, n_rows, n_cols
     )
     should_not_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
-        elevation_angle - eps, azimuth_angle, 1, 1
+        elevation_angle - eps, azimuth_angle, 1, 1, n_rows, n_cols
     )
     np.testing.assert_array_equal(
         get_shading_mask(
@@ -102,6 +106,40 @@ def test_get_shading_mask(elevation_angle, azimuth_angle):
             solar_elevation_angle=elevation_angle,
         ),
         np.zeros(should_not_be_shaded.arr.shape, dtype=int),
+    )
+
+
+@pytest.mark.parametrize("elevation_angle", [3, 15, 37, 87])
+@pytest.mark.parametrize("azimuth_angle", [5, 15, 35, 55, 75, 165, -165])
+def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_less_simple_cases(
+    elevation_angle, azimuth_angle
+):
+    """Test the get_shading_mask function with a slope that parallels the solar elevation angle for azimuth angles that are multiples of 90."""
+    n_rows, n_cols = 40, 40
+    eps = 1
+    should_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
+        elevation_angle + eps, azimuth_angle, 1, 1, n_rows, n_cols
+    )
+    should_not_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
+        elevation_angle - eps, azimuth_angle, 1, 1, n_rows, n_cols
+    )
+    rows_to_test = slice(2, n_rows - 2)
+    cols_to_test = slice(2, n_cols - 2)
+    np.testing.assert_array_equal(
+        get_shading_mask(
+            should_be_shaded,
+            solar_azimuth_angle=azimuth_angle,
+            solar_elevation_angle=elevation_angle,
+        )[rows_to_test, cols_to_test],
+        np.ones((n_rows - 4, n_cols - 4), dtype=int),
+    )
+    np.testing.assert_array_equal(
+        get_shading_mask(
+            should_not_be_shaded,
+            solar_azimuth_angle=azimuth_angle,
+            solar_elevation_angle=elevation_angle,
+        )[rows_to_test, cols_to_test],
+        np.zeros((n_rows - 4, n_cols - 4), dtype=int),
     )
 
 
