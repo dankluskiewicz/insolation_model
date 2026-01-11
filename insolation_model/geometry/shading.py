@@ -16,7 +16,7 @@ def get_shading_mask(
     """
     if solar_elevation_angle == 90:
         return np.zeros(dem.arr.shape, dtype=int)
-    dem_points = _point_representation_of_dem(dem)
+    dem_points = _point_representation_of_dem(_double_resolution_of_raster(dem))
     rotated_dem_points = _rotate_points_around_z_axis(dem_points, solar_azimuth_angle)
     rotated_dem = _raster_representation_of_points_max_z(
         rotated_dem_points, dem.dx, dem.dy
@@ -30,7 +30,7 @@ def get_shading_mask(
         rotated_mask, rotated_dem_points[0, :], rotated_dem_points[1, :]
     )
     return _unflatten_vector_to_raster_dimensions(
-        point_mask, dem.arr.shape[0], dem.arr.shape[1]
+        point_mask, dem.arr.shape[0] * 2, dem.arr.shape[1] * 2
     )
 
 
