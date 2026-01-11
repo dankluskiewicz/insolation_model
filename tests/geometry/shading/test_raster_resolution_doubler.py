@@ -4,7 +4,6 @@ import rasterio
 
 from insolation_model.geometry.shading import (
     _double_resolution_of_raster,
-    _double_resolution_of_array,
 )
 from insolation_model.geometry.topography import dem_to_gradient
 from insolation_model.raster import Raster
@@ -30,7 +29,7 @@ def test_double_resolution_of_very_simple_raster(dx, dy):
 @pytest.mark.parametrize("grad_x", [0, -1, 3])
 @pytest.mark.parametrize("grad_y", [0, 1, -3])
 @pytest.mark.parametrize("n_rows", [3, 8])
-@pytest.mark.parametrize("n_cols", [2, 5])
+@pytest.mark.parametrize("n_cols", [5, 6])
 def test_double_resolution_of_simple_raster_with_gradients(
     dx, dy, grad_x, grad_y, n_rows, n_cols
 ):
@@ -40,6 +39,7 @@ def test_double_resolution_of_simple_raster_with_gradients(
     assert doubled_raster.arr.shape == (2 * n_rows, 2 * n_cols)
     assert doubled_raster.dx == dx / 2
     assert doubled_raster.dy == dy / 2
-    doubled_grad_x, doubled_grad_y = dem_to_gradient(doubled_raster)
-    assert all(doubled_grad_x == _double_resolution_of_array(grad_x)).all()
-    assert all(doubled_grad_y == _double_resolution_of_array(grad_y)).all()
+    grad_x_of_doubled_raster, grad_y_of_doubled_raster = dem_to_gradient(doubled_raster)
+    # The last two columns and rows are duplicates, so they will not share gradient with the original raster.
+    assert (grad_x_of_doubled_raster[:-2, :-2] == grad_x).all()
+    assert (grad_y_of_doubled_raster[:-2, :-2] == grad_y).all()
