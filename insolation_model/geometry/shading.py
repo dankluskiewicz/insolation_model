@@ -85,6 +85,7 @@ def _raster_representation_of_points_max_z(
     dy: float,
     crs: pyproj.CRS | None = None,
 ) -> Raster:
+    # TODO: change this to use mean Z value of points in each cell
     """Convert a 3D array of XYZ points to a Raster using max Z values per cell.
 
     Args:
@@ -197,3 +198,71 @@ def _unflatten_vector_to_raster_dimensions(
 ) -> np.ndarray:
     """Unflatten a vector to match the dimensions of a raster."""
     return vector.reshape(n_rows, n_cols)
+
+
+def _double_resolution_of_array(arr: np.ndarray) -> np.ndarray:
+    """Double the resolution of an array.
+    Every other row and column contains values from the original array,
+    and the intermediate rows and columns are means of the original
+    surrounding values.
+    E.g.:
+        If input is [[a, b], [c, d]], output will be:
+        [[a, (a+b)/2, b],
+         [(a+c)/2, (a+b+c+d)/4, (b+d)/2],
+         [c, (c+d)/2, d]].
+
+    Args:
+        arr: 2D numpy array of shape (m, n)
+
+    Returns:
+        2D numpy array of shape (2m, 2n)
+
+    Notes:
+    Because the application for this is to double the resolution of a raster,
+    it's important that the output have twice as many rows and columns as the
+    input. Otherwise (considering an output with 2m - 1 rows or 2n - 1 columns),
+    it would be difficult to preserve the geographic extent of the original raster.
+    This means:
+        - The output array will always have an even number of rows and columns.
+        - Every even (0, 2, ...) row and column (except the last) will alternate between
+          an original value and an average of 2 surrounding values.
+        - Every odd (1, 3, ...) row and column will be an average of 4 surrounding values.
+        - The last row and column will be a copy of the last original row and column.
+    """
+    m, n = arr.shape
+    assert m > 1 and n > 1, (
+        "Array must have at least 2 rows and 2 columns to double resolution"
+    )
+    result = np.zeros((2 * m, 2 * n), dtype=arr.dtype)
+
+    # Place original values at even indices
+    result[::2, ::2] = arr
+
+    # Fill in intermediate columns (odd columns, even rows)
+    # with average of left and right neighbors
+    result[::2, 1::2][:, : n - 1] = (arr[:, :-1] + arr[:, 1:]) / 2
+    # Last intermediate column: copy the last original column
+    # TODO: is this necessary?
+    result[::2, 1::2][:, -1] = arr[:, -1]
+
+    # Fill in intermediate rows (odd rows, even columns)
+    # Average of top and bottom neighbors
+    result[1::2, ::2][: m - 1, :] = (arr[:-1, :] + arr[1:, :]) / 2
+    # Last intermediate row: copy the last original row
+    # TODO: is this necessary?
+    result[1::2, ::2][-1, :] = arr[-1, :]
+
+    # Fill in intermediate positions (odd rows, odd columns)
+    # Average of four neighbors
+    # For positions between both rows and columns
+    result[1::2, 1::2][: m - 1, : n - 1] = (
+        arr[:-1, :-1] + arr[:-1, 1:] + arr[1:, :-1] + arr[1:, 1:]
+    ) / 4
+    # Right edge: average of two vertical neighbors
+    result[1::2, 1::2][: m - 1, -1] = (arr[:-1, -1] + arr[1:, -1]) / 2
+    # Bottom edge: average of two horizontal neighbors
+    result[1::2, 1::2][-1, : n - 1] = (arr[-1, :-1] + arr[-1, 1:]) / 2
+    # Bottom-right corner: copy the last original value
+    result[1::2, 1::2][-1, -1] = arr[-1, -1]
+
+    return result
