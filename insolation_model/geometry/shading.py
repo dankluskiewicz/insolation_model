@@ -165,7 +165,7 @@ def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
     The mask is 1 for shaded cells.
     """
     _, grad_y = dem_to_gradient(dem)
-    mask = np.zeros(dem.arr.shape, dtype=int)
+    mask = np.zeros(dem.arr.shape, dtype=float)
     n_rows, _ = dem.arr.shape
     cumulative_max_elevation = _fill_nans(dem.arr[0, :], -np.inf)
     for row_num in range(1, n_rows):
@@ -173,6 +173,7 @@ def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
         cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
         mask[row_num, row_elevations < cumulative_max_elevation] = 1
     mask[grad_y > 0] = 1  # South facing slope will be shaded
+    mask[np.isnan(dem.arr)] = np.nan
     return dem.with_array(mask)
 
 
@@ -202,70 +203,11 @@ def _unflatten_vector_to_raster_dimensions(
 
 def _double_resolution_of_array(arr: np.ndarray) -> np.ndarray:
     """Double the resolution of an array.
-    Every other row and column contains values from the original array,
-    and the intermediate rows and columns are means of the original
-    surrounding values.
-    E.g.:
-        If input is [[a, b], [c, d]], output will be:
-        [[a, (a+b)/2, b],
-         [(a+c)/2, (a+b+c+d)/4, (b+d)/2],
-         [c, (c+d)/2, d]].
-
-    Args:
-        arr: 2D numpy array of shape (m, n)
-
-    Returns:
-        2D numpy array of shape (2m, 2n)
-
-    Notes:
-    Because the application for this is to double the resolution of a raster,
-    it's important that the output have twice as many rows and columns as the
-    input. Otherwise (considering an output with 2m - 1 rows or 2n - 1 columns),
-    it would be difficult to preserve the geographic extent of the original raster.
-    This means:
-        - The output array will always have an even number of rows and columns.
-        - Every even (0, 2, ...) row and column (except the last) will alternate between
-          an original value and an average of 2 surrounding values.
-        - Every odd (1, 3, ...) row and column will be an average of 4 surrounding values.
-        - The last row and column will be a copy of the last original row and column.
+    Every cell in the input array is replaced by a 2x2 block of cells in the output array,
+    where all 4 cells in the block have the same value as the input cell.
     """
-    m, n = arr.shape
-    assert m > 1 and n > 1, (
-        "Array must have at least 2 rows and 2 columns to double resolution"
-    )
-    result = np.zeros((2 * m, 2 * n), dtype=arr.dtype)
-
-    # Place original values at even indices
-    result[::2, ::2] = arr
-
-    # Fill in intermediate columns (odd columns, even rows)
-    # with average of left and right neighbors
-    result[::2, 1::2][:, : n - 1] = (arr[:, :-1] + arr[:, 1:]) / 2
-    # Last intermediate column: copy the last original column
-    # TODO: is this necessary?
-    result[::2, 1::2][:, -1] = arr[:, -1]
-
-    # Fill in intermediate rows (odd rows, even columns)
-    # Average of top and bottom neighbors
-    result[1::2, ::2][: m - 1, :] = (arr[:-1, :] + arr[1:, :]) / 2
-    # Last intermediate row: copy the last original row
-    # TODO: is this necessary?
-    result[1::2, ::2][-1, :] = arr[-1, :]
-
-    # Fill in intermediate positions (odd rows, odd columns)
-    # Average of four neighbors
-    # For positions between both rows and columns
-    result[1::2, 1::2][: m - 1, : n - 1] = (
-        arr[:-1, :-1] + arr[:-1, 1:] + arr[1:, :-1] + arr[1:, 1:]
-    ) / 4
-    # Right edge: average of two vertical neighbors
-    result[1::2, 1::2][: m - 1, -1] = (arr[:-1, -1] + arr[1:, -1]) / 2
-    # Bottom edge: average of two horizontal neighbors
-    result[1::2, 1::2][-1, : n - 1] = (arr[-1, :-1] + arr[-1, 1:]) / 2
-    # Bottom-right corner: copy the last original value
-    result[1::2, 1::2][-1, -1] = arr[-1, -1]
-
-    return result
+    # Repeat each row twice, then repeat each column twice
+    return np.repeat(np.repeat(arr, 2, axis=0), 2, axis=1)
 
 
 def _double_resolution_of_raster(raster: Raster) -> Raster:
@@ -280,6 +222,39 @@ def _double_resolution_of_raster(raster: Raster) -> Raster:
     )
     return Raster(
         arr=_double_resolution_of_array(raster.arr),
+        transform=new_transform,
+        crs=raster.crs,
+    )
+
+
+def _halve_resolution_of_an_array(arr: np.ndarray) -> np.ndarray:
+    """Halve the resolution of an array.
+    Every cell in the output array is the average of the 4 cells in the input array that it replaces.
+    This is the inverse of _double_resolution_of_an_array.
+    """
+    # the arrays this is applied to are always even-dimensional, and that assumption makes this easier
+    m, n = arr.shape
+    if m % 2 != 0 or n % 2 != 0:
+        raise ValueError(
+            "Array must have even number of rows and columns to halve resolution"
+        )
+    # Reshape to group 2x2 blocks: (m//2, 2, n//2, 2)
+    reshaped = arr.reshape(m // 2, 2, n // 2, 2)
+    # Take mean along the block dimensions (axes 1 and 3)
+    return reshaped.mean(axis=(1, 3))
+
+
+def _halve_resolution_of_raster(raster: Raster) -> Raster:
+    new_transform = rasterio.Affine(
+        raster.dx * 2,
+        0.0,
+        raster.origin[0],
+        0.0,
+        -raster.dy * 2,
+        raster.origin[1],
+    )
+    return Raster(
+        arr=_halve_resolution_of_an_array(raster.arr),
         transform=new_transform,
         crs=raster.crs,
     )
