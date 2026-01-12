@@ -12,14 +12,21 @@ def get_shading_mask(
     The solar position is defined by the solar azimuth angle and elevation angle.
     The azimuth angle is the counterclockwise angle between the sun and the north direction.
     The elevation angle is the angle between the sun and the horizon.
-    The mask is 1 for shaded cells.
+    The mask is 1 for unshaded cells and 0 for shaded cells. Some cells may have partial shading.
     """
     if solar_elevation_angle == 90:
-        return np.zeros(dem.arr.shape, dtype=int)
-    dem_points = _point_representation_of_dem(_double_resolution_of_raster(dem))
-    rotated_dem_points = _rotate_points_around_z_axis(dem_points, solar_azimuth_angle)
+        return np.zeros(dem.arr.shape, dtype=float)
+    doubled_dem = _double_resolution_of_raster(dem)
+    doubled_dem_points = _point_representation_of_dem(doubled_dem)
+    rotated_doubled_dem_points = _rotate_points_around_z_axis(
+        doubled_dem_points, solar_azimuth_angle
+    )
     rotated_dem = _raster_representation_of_points_max_z(
-        rotated_dem_points, dem.dx, dem.dy
+        rotated_doubled_dem_points,
+        dem.dx,
+        dem.dy,
+        *_rotate_raster_corners_around_z_axis(dem, solar_azimuth_angle),
+        crs=dem.crs,
     )
     rotated_mask = _shading_mask_from_sun_at_north_horizon(
         _add_y_gradient(
@@ -27,10 +34,10 @@ def get_shading_mask(
         )
     )
     point_mask = _raster_values_at_points(
-        rotated_mask, rotated_dem_points[0, :], rotated_dem_points[1, :]
+        rotated_mask, rotated_doubled_dem_points[0, :], rotated_doubled_dem_points[1, :]
     )
-    return _unflatten_vector_to_raster_dimensions(
-        point_mask, dem.arr.shape[0] * 2, dem.arr.shape[1] * 2
+    return _halve_resolution_of_an_array(
+        _unflatten_vector_to_raster_dimensions(point_mask, *doubled_dem.arr.shape)
     )
 
 
@@ -83,34 +90,28 @@ def _raster_representation_of_points_max_z(
     XYZ: np.ndarray,
     dx: float,
     dy: float,
+    xmin: float,
+    xmax: float,
+    ymin: float,
+    ymax: float,
     crs: pyproj.CRS | None = None,
 ) -> Raster:
     # TODO: change this to use mean Z value of points in each cell
     """Convert a 3D array of XYZ points to a Raster using max Z values per cell.
-
-    Args:
-        XYZ: Array of shape (3, N) where rows are [X, Y, Z]
-        dx: Grid cell spacing in X direction
-        dy: Grid cell spacing in Y direction
-        crs: Coordinate reference system. Defaults to None because crs isn't relevant to the
-            application of this helper function.
-
-    Returns:
-        Raster with array values being the maximum Z value for each grid cell.
-        Cells with no points will have NaN values.
+    Arg XYZ is an array of shape (3, N) where rows are [X, Y, Z]
+    Returns a Raster with array values being the maximum Z value for each grid cell.
+    Cells with no points will have NaN values.
     """
     X, Y, Z = XYZ[0, :], XYZ[1, :], XYZ[2, :]
 
     # Add half a cell to the min and max to ensure the raster covers the points
     # The half-cell buffer will also make it possibole to recover the
     # oringinal raster in a [raster -> points -> raster] round trip.
-    x_min, x_max = np.min(X) - dx / 2, np.max(X) + dx / 2
-    y_min, y_max = np.min(Y) - dy / 2, np.max(Y) + dy / 2
-    n_cols = int(np.ceil((x_max - x_min) / dx)) + 1
-    n_rows = int(np.ceil((y_max - y_min) / dy)) + 1
+    n_cols = int(np.ceil((xmax - xmin) / dx)) + 1
+    n_rows = int(np.ceil((ymax - ymin) / dy)) + 1
 
-    col_indices = np.floor((X - x_min) / dx).astype(int)
-    row_indices = np.floor((y_max - Y) / dy).astype(int)
+    col_indices = np.floor((X - xmin) / dx).astype(int)
+    row_indices = np.floor((ymax - Y) / dy).astype(int)
     # Saturate indices to valid range
     col_indices = np.clip(col_indices, 0, n_cols - 1)
     row_indices = np.clip(row_indices, 0, n_rows - 1)
@@ -135,9 +136,24 @@ def _raster_representation_of_points_max_z(
         col = idx % n_cols
         raster_arr[row, col] = np.max(sorted_Z[start:end])
 
-    transform = rasterio.Affine(dx, 0.0, x_min, 0.0, -dy, y_max)
+    transform = rasterio.Affine(dx, 0.0, xmin, 0.0, -dy, ymax)
 
     return Raster(arr=raster_arr, transform=transform, crs=crs)
+
+
+def _rotate_raster_corners_around_z_axis(
+    dem: Raster, angle: float
+) -> tuple[float, float, float, float]:
+    xmin, ymin, xmax, ymax = dem.bounds
+    corners = np.array(
+        [[xmin, xmin, xmax, xmax], [ymin, ymax, ymin, ymax], [0, 0, 0, 0]]
+    )
+    rotated_corners = _rotate_points_around_z_axis(corners, angle)
+    rotated_xmin = np.min(rotated_corners[0, :])
+    rotated_xmax = np.max(rotated_corners[0, :])
+    rotated_ymin = np.min(rotated_corners[1, :])
+    rotated_ymax = np.max(rotated_corners[1, :])
+    return rotated_xmin, rotated_xmax, rotated_ymin, rotated_ymax
 
 
 def _add_y_gradient(dem: Raster, gradient: float) -> Raster:
@@ -162,17 +178,17 @@ def _gradient_from_elevation_angle(elevation_angle: float) -> float:
 
 def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
     """Create a mask showing what cells would be shaded by as sun at the north horizon.
-    The mask is 1 for shaded cells.
+    The mask is 1 for unshaded cells and 0 for shaded cells.
     """
     _, grad_y = dem_to_gradient(dem)
-    mask = np.zeros(dem.arr.shape, dtype=float)
+    mask = np.ones(dem.arr.shape, dtype=float)
     n_rows, _ = dem.arr.shape
     cumulative_max_elevation = _fill_nans(dem.arr[0, :], -np.inf)
     for row_num in range(1, n_rows):
         row_elevations = _fill_nans(dem.arr[row_num, :], -np.inf)
         cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
-        mask[row_num, row_elevations < cumulative_max_elevation] = 1
-    mask[grad_y > 0] = 1  # South facing slope will be shaded
+        mask[row_num, row_elevations < cumulative_max_elevation] = 0
+    mask[grad_y > 0] = 0  # South facing slope will be shaded
     mask[np.isnan(dem.arr)] = np.nan
     return dem.with_array(mask)
 
