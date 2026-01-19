@@ -108,10 +108,6 @@ def _raster_representation_of_points_mean_z(
 
     col_indices = np.floor((X - xmin) / dx).astype(int)
     row_indices = np.floor((ymax - Y) / dy).astype(int)
-    # Saturate indices to valid range
-    # TODO: review if this is necessary
-    col_indices = np.clip(col_indices, 0, n_cols - 1)
-    row_indices = np.clip(row_indices, 0, n_rows - 1)
 
     # Compute mean Z value for each cell using bincount
     # Sum all Z values for each unique flat_index
