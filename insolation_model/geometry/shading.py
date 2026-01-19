@@ -15,7 +15,7 @@ def get_shading_mask(
     The mask is 1 for unshaded cells and 0 for shaded cells. Some cells may have partial shading.
     """
     if solar_elevation_angle == 90:
-        return np.zeros(dem.arr.shape, dtype=float)
+        return np.ones(dem.arr.shape, dtype=float)
     doubled_dem = _double_resolution_of_raster(dem)
     doubled_dem_points = _point_representation_of_dem(doubled_dem)
     rotated_doubled_dem_points = _rotate_points_around_z_axis(

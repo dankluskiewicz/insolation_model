@@ -17,16 +17,18 @@ from tests.conftest import make_dem_with_gradients, make_dem_with_step, make_fla
 @pytest.mark.parametrize(
     ["grad_y", "expected_mask"],
     [
-        (0, False),
-        (1, True),
-        (-1, False),
-        (3, True),
-        (999999, True),
+        (0, 1),
+        (1, 0),
+        (-1, 1),
+        (3, 0),
+        (999999, 0),
     ],
 )
 def test_shading_mask_from_sun_at_north_horizon(dx, dy, grad_x, grad_y, expected_mask):
     dem = make_dem_with_gradients(grad_x, grad_y, dx, dy)
     mask = _shading_mask_from_sun_at_north_horizon(dem)
+    print(mask.arr)
+    print(expected_mask)
     assert mask.arr.all() == expected_mask
 
 
@@ -42,12 +44,9 @@ def test_shading_mask_from_sun_at_north_horizon_with_step(
         step_size, start_index, stop_index, 0, dx, dy, n_rows=8, n_cols=4
     )
     mask = _shading_mask_from_sun_at_north_horizon(dem)
-    expected_mask = np.zeros(dem.arr.shape, dtype=bool)
-    expected_mask[start_index:, :] = step_size < 0
-    print(dem.arr)
-    print(dem_to_gradient(dem)[1])
-    expected_mask[dem_to_gradient(dem)[1] > 0] = True
-    print(f"{mask=}, \n{expected_mask=}")
+    expected_mask = np.ones(dem.arr.shape, dtype=bool)
+    expected_mask[start_index:, :] = 0 if step_size < 0 else 1
+    expected_mask[dem_to_gradient(dem)[1] > 0] = 0
     np.testing.assert_array_equal(mask.arr, expected_mask)
 
 
@@ -58,7 +57,7 @@ def test_flat_slope_never_shaded(azimuth_angle, elevation_angle):
     mask = get_shading_mask(
         dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=elevation_angle
     )
-    np.testing.assert_array_equal(mask, np.zeros(dem.arr.shape, dtype=int))
+    np.testing.assert_array_equal(mask, np.ones(dem.arr.shape, dtype=int))
 
 
 @pytest.mark.parametrize(("grad_x", "grad_y"), [(0, 1), (1, 4)])
@@ -73,7 +72,7 @@ def test_dem_is_never_masked_when_solar_elevation_angle_is_90(
         get_shading_mask(
             dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=90
         ),
-        np.zeros(dem.arr.shape, dtype=int),
+        np.ones(dem.arr.shape, dtype=int),
     )
 
 
@@ -97,7 +96,7 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_c
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
         ),
-        np.ones(should_be_shaded.arr.shape, dtype=int),
+        np.zeros(should_be_shaded.arr.shape, dtype=int),
     )
     np.testing.assert_array_equal(
         get_shading_mask(
@@ -105,7 +104,7 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_c
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
         ),
-        np.zeros(should_not_be_shaded.arr.shape, dtype=int),
+        np.ones(should_not_be_shaded.arr.shape, dtype=int),
     )
 
 
@@ -132,7 +131,7 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_less_sim
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
         )[rows_to_test, cols_to_test],
-        np.ones((n_rows - 4, n_cols - 4), dtype=int),
+        np.zeros((n_rows - 4, n_cols - 4), dtype=int),
     )
     np.testing.assert_array_equal(
         get_shading_mask(
@@ -140,7 +139,7 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_less_sim
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
         )[rows_to_test, cols_to_test],
-        np.zeros((n_rows - 4, n_cols - 4), dtype=int),
+        np.ones((n_rows - 4, n_cols - 4), dtype=int),
     )
 
 
