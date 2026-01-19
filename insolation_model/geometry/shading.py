@@ -21,7 +21,7 @@ def get_shading_mask(
     rotated_doubled_dem_points = _rotate_points_around_z_axis(
         doubled_dem_points, solar_azimuth_angle
     )
-    rotated_dem = _raster_representation_of_points_max_z(
+    rotated_dem = _raster_representation_of_points_mean_z(
         rotated_doubled_dem_points,
         dem.dx,
         dem.dy,
@@ -86,55 +86,42 @@ def _rotate_points_around_z_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
     return np.dot(rotation_matrix, XYZ)
 
 
-def _raster_representation_of_points_max_z(
+def _raster_representation_of_points_mean_z(
     XYZ: np.ndarray,
     dx: float,
     dy: float,
     xmin: float,
-    xmax: float,
     ymin: float,
+    xmax: float,
     ymax: float,
     crs: pyproj.CRS | None = None,
 ) -> Raster:
-    # TODO: change this to use mean Z value of points in each cell
-    """Convert a 3D array of XYZ points to a Raster using max Z values per cell.
+    """Convert a 3D array of XYZ points to a Raster using mean of Z values per cell.
     Arg XYZ is an array of shape (3, N) where rows are [X, Y, Z]
-    Returns a Raster with array values being the maximum Z value for each grid cell.
+    Returns a Raster with array values being the mean Z value for each grid cell.
     Cells with no points will have NaN values.
     """
     X, Y, Z = XYZ[0, :], XYZ[1, :], XYZ[2, :]
 
-    # Add half a cell to the min and max to ensure the raster covers the points
-    # The half-cell buffer will also make it possibole to recover the
-    # oringinal raster in a [raster -> points -> raster] round trip.
-    n_cols = int(np.ceil((xmax - xmin) / dx)) + 1
-    n_rows = int(np.ceil((ymax - ymin) / dy)) + 1
+    n_cols = int(np.ceil((xmax - xmin) / dx))
+    n_rows = int(np.ceil((ymax - ymin) / dy))
 
     col_indices = np.floor((X - xmin) / dx).astype(int)
     row_indices = np.floor((ymax - Y) / dy).astype(int)
     # Saturate indices to valid range
+    # TODO: review if this is necessary
     col_indices = np.clip(col_indices, 0, n_cols - 1)
     row_indices = np.clip(row_indices, 0, n_rows - 1)
+
+    # Compute mean Z value for each cell using bincount
+    # Sum all Z values for each unique flat_index
     flat_indices = row_indices * n_cols + col_indices
-
-    raster_arr = np.full((n_rows, n_cols), np.nan)
-
-    # TODO: review this algorithm
-    sort_idx = np.argsort(flat_indices)
-    sorted_indices = flat_indices[sort_idx]
-    sorted_Z = Z[sort_idx]
-
-    # Find where indices change (group boundaries)
-    diff = np.diff(sorted_indices)
-    group_starts = np.concatenate(([0], np.where(diff > 0)[0] + 1))
-    group_ends = np.concatenate((group_starts[1:], [len(sorted_indices)]))
-
-    # Compute max for each group
-    for start, end in zip(group_starts, group_ends):
-        idx = sorted_indices[start]
-        row = idx // n_cols
-        col = idx % n_cols
-        raster_arr[row, col] = np.max(sorted_Z[start:end])
+    n_cells = n_rows * n_cols
+    sums = np.bincount(flat_indices, weights=Z, minlength=n_cells)
+    counts = np.bincount(flat_indices, minlength=n_cells)
+    means = np.where(counts > 0, sums / counts, np.nan)
+    print(f"{n_rows=}, {n_cols=}, {means.shape=}")
+    raster_arr = _unflatten_vector_to_raster_dimensions(means, n_rows, n_cols)
 
     transform = rasterio.Affine(dx, 0.0, xmin, 0.0, -dy, ymax)
 
@@ -153,7 +140,7 @@ def _rotate_raster_corners_around_z_axis(
     rotated_xmax = np.max(rotated_corners[0, :])
     rotated_ymin = np.min(rotated_corners[1, :])
     rotated_ymax = np.max(rotated_corners[1, :])
-    return rotated_xmin, rotated_xmax, rotated_ymin, rotated_ymax
+    return rotated_xmin, rotated_ymin, rotated_xmax, rotated_ymax
 
 
 def _add_y_gradient(dem: Raster, gradient: float) -> Raster:

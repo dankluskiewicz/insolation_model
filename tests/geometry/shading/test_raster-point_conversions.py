@@ -7,6 +7,7 @@ from insolation_model.geometry.shading import (
     _point_representation_of_dem,
     _unflatten_vector_to_raster_dimensions,
     _rotate_points_around_z_axis,
+    _raster_representation_of_points_mean_z,
 )
 from tests.conftest import make_dem_with_gradients, make_flat_dem, make_dem_with_step
 
@@ -74,9 +75,14 @@ def test_raster_point_round_trip(
         origin_x=origin_x,
         origin_y=origin_y,
     )
-    _X, _Y, Z = _point_representation_of_dem(dem)
+    X, Y, Z = _point_representation_of_dem(dem)
     unflattened_Z = _unflatten_vector_to_raster_dimensions(Z, n_rows, n_cols)
     np.testing.assert_array_almost_equal(unflattened_Z, dem.arr)
+
+    dem_after_round_trip = _raster_representation_of_points_mean_z(
+        np.stack([X, Y, Z], axis=0), dx, dy, *dem.bounds, crs=dem.crs
+    )
+    np.testing.assert_array_almost_equal(dem_after_round_trip.arr, dem.arr)
 
 
 @pytest.mark.parametrize("dx", [1, 2])
