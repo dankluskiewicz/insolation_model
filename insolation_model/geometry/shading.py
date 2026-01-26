@@ -127,7 +127,8 @@ def _raster_representation_of_points_mean_z(
     n_cells = n_rows * n_cols
     sums = np.bincount(flat_indices, weights=Z, minlength=n_cells)
     counts = np.bincount(flat_indices, minlength=n_cells)
-    means = np.where(counts > 0, sums / counts, np.nan)
+    # Use np.divide with where to avoid division by zero warning
+    means = np.divide(sums, counts, out=np.full(n_cells, np.nan), where=counts > 0)
     print(f"{n_rows=}, {n_cols=}, {means.shape=}")
     raster_arr = _unflatten_vector_to_raster_dimensions(means, n_rows, n_cols)
 
@@ -176,6 +177,7 @@ def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
     The mask is 1 for unshaded cells and 0 for shaded cells.
     """
     _, grad_y = dem_to_gradient(dem)
+    grad_y_filled = _fill_nans_with_nearest_neighbor(grad_y)
     mask = np.ones(dem.arr.shape, dtype=float)
     n_rows, _ = dem.arr.shape
     cumulative_max_elevation = _fill_nans(dem.arr[0, :], -np.inf)
@@ -183,7 +185,7 @@ def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
         row_elevations = _fill_nans(dem.arr[row_num, :], -np.inf)
         cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
         mask[row_num, row_elevations < cumulative_max_elevation] = 0
-    mask[grad_y > 0] = 0  # South facing slope will be shaded
+    mask[grad_y_filled > 0] = 0  # South facing slope will be shaded
     mask[np.isnan(dem.arr)] = np.nan
     return dem.with_array(mask)
 
