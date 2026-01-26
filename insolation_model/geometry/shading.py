@@ -10,10 +10,15 @@ def get_shading_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
 ) -> np.ndarray:
     """Get the shading mask for a DEM, given a solar position.
-    The solar position is the solar azimuth angle and elevation angle.
     The azimuth angle is the counterclockwise angle between the sun and the north direction.
     The elevation angle is the angle between the sun and the horizon.
     The mask is 1 for unshaded cells and 0 for shaded cells. Some cells may have partial shading.
+
+    This function works by creating a point representation of the DEM, rotating the points around the z-axis so that the DEM y axis
+    is parallel to the solar azimuth angle, then converting back to a raster,
+    adding a y-gradient to the raster to account for the solar elevation angle, and then creating a mask
+    from cumulative maximum elevation of the transformed DEM. This is more convoluted than I originally expected it to be,
+    and for the sake of simplicity it would be worth trying a completely different approach.
     """
     if solar_elevation_angle == 90:
         return np.ones(dem.arr.shape, dtype=float)
@@ -110,7 +115,7 @@ def _raster_representation_of_points_mean_z(
 ) -> Raster:
     """Convert a 3D array of XYZ points to a Raster using mean of Z values per cell.
     Arg XYZ is an array of shape (3, N) where rows are [X, Y, Z]
-    Returns a Raster with array values being the mean Z value for each grid cell.
+    Returns a Raster with array values being the mean Z value for points that coincide with each grid cell.
     Cells with no points will have NaN values.
     """
     X, Y, Z = XYZ[0, :], XYZ[1, :], XYZ[2, :]
