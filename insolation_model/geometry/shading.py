@@ -134,7 +134,6 @@ def _raster_representation_of_points_mean_z(
     counts = np.bincount(flat_indices, minlength=n_cells)
     # Use np.divide with where to avoid division by zero warning
     means = np.divide(sums, counts, out=np.full(n_cells, np.nan), where=counts > 0)
-    print(f"{n_rows=}, {n_cols=}, {means.shape=}")
     raster_arr = _unflatten_vector_to_raster_dimensions(means, n_rows, n_cols)
 
     transform = rasterio.Affine(dx, 0.0, xmin, 0.0, -dy, ymax)
@@ -173,7 +172,9 @@ def _gradient_from_elevation_angle(elevation_angle: float) -> float:
     """Get the gradient of a slope that parallels an elevation angle.
     Avoid infinity at 90 degrees——will need to handle 90-degree case elsewhere.
     """
-    assert 0 <= elevation_angle < 90, "Elevation angle must be in [0, 90) degrees"
+    assert 0 <= elevation_angle < 90, (
+        f"{elevation_angle=}, elevation angle must be in [0, 90) degrees"
+    )
     return -np.tan(_rad(elevation_angle))
 
 
