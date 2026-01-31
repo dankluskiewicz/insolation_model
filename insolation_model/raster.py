@@ -13,6 +13,8 @@ class Raster:
         self.arr = arr.astype(float)
         self.transform = transform
         self.crs = crs
+        if self.dx != self.dy:
+            raise ValueError("this package has only been tested for square pixels")
 
     @property
     def dx(self) -> float:
