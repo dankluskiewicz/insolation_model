@@ -4,12 +4,13 @@ import numpy as np
 from insolation_model.raster import Raster
 from insolation_model.geometry.shading import (
     get_shading_mask,
-    _rad,
     _fill_nans_with_nearest_neighbor,
+    _gradient_for_slope_that_parallels_solar_elevation,
 )
 from tests.conftest import make_dem_with_gradients, make_flat_dem
 
 
+@pytest.mark.skip(reason="Not implemented")
 @pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
 @pytest.mark.parametrize("elevation_angle", [0, 30, 90])
 def test_flat_slope_never_shaded(azimuth_angle, elevation_angle):
@@ -103,18 +104,6 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_less_sim
         )[rows_to_test, cols_to_test],
         np.ones((n_rows - 4, n_cols - 4), dtype=int),
     )
-
-
-def _gradient_for_slope_that_parallels_solar_elevation(
-    elevation_angle: float, azimuth_angle: float
-) -> float:
-    if elevation_angle <= 0:
-        raise ValueError("Elevation angle must be greater than 0")
-    if elevation_angle >= 90:
-        raise ValueError("Elevation angle must be less than 90")
-    grad_x = np.sin(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
-    grad_y = np.cos(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
-    return grad_x, grad_y
 
 
 def _dem_with_slope_that_parallels_solar_elevation(

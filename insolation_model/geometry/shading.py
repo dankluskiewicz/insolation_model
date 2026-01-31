@@ -25,3 +25,15 @@ def _fill_nans_with_nearest_neighbor(arr: np.ndarray) -> np.ndarray:
         invalid, return_distances=False, return_indices=True
     )
     return arr[tuple(indices)]
+
+
+def _gradient_for_slope_that_parallels_solar_elevation(
+    elevation_angle: float, azimuth_angle: float
+) -> float:
+    if elevation_angle <= 0:
+        raise ValueError("Elevation angle must be greater than 0")
+    if elevation_angle >= 90:
+        raise ValueError("Elevation angle must be less than 90")
+    grad_x = np.sin(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
+    grad_y = np.cos(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
+    return grad_x, grad_y
