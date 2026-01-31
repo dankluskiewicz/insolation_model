@@ -2,55 +2,12 @@ import pytest
 import numpy as np
 
 from insolation_model.raster import Raster
-from insolation_model.geometry.topography import dem_to_gradient
 from insolation_model.geometry.shading import (
-    _shading_mask_from_sun_at_north_horizon,
     get_shading_mask,
     _rad,
     _fill_nans_with_nearest_neighbor,
 )
-from tests.conftest import make_dem_with_gradients, make_dem_with_step, make_flat_dem
-
-
-@pytest.mark.skip(reason="Not implemented")
-@pytest.mark.parametrize("dx", [1, 2])
-@pytest.mark.parametrize("dy", [1, 2])
-@pytest.mark.parametrize("grad_x", [1, -2, 999999])
-@pytest.mark.parametrize(
-    ["grad_y", "expected_mask"],
-    [
-        (0, 1),
-        (1, 0),
-        (-1, 1),
-        (3, 0),
-        (999999, 0),
-    ],
-)
-def test_shading_mask_from_sun_at_north_horizon(dx, dy, grad_x, grad_y, expected_mask):
-    dem = make_dem_with_gradients(grad_x, grad_y, dx, dy)
-    mask = _shading_mask_from_sun_at_north_horizon(dem)
-    print(mask.arr)
-    print(expected_mask)
-    assert mask.arr.all() == expected_mask
-
-
-@pytest.mark.skip(reason="Not implemented")
-@pytest.mark.parametrize("dx", [1, 2])
-@pytest.mark.parametrize("dy", [1, 2])
-@pytest.mark.parametrize("step_size", [1, -2, -99, 99])
-@pytest.mark.parametrize("start_index", [0, 1, 3])
-@pytest.mark.parametrize("stop_index", [4, 8])
-def test_shading_mask_from_sun_at_north_horizon_with_step(
-    dx, dy, step_size, start_index, stop_index
-):
-    dem = make_dem_with_step(
-        step_size, start_index, stop_index, 0, dx, dy, n_rows=8, n_cols=4
-    )
-    mask = _shading_mask_from_sun_at_north_horizon(dem)
-    expected_mask = np.ones(dem.arr.shape, dtype=bool)
-    expected_mask[start_index:, :] = 0 if step_size < 0 else 1
-    expected_mask[dem_to_gradient(dem)[1] > 0] = 0
-    np.testing.assert_array_equal(mask.arr, expected_mask)
+from tests.conftest import make_dem_with_gradients, make_flat_dem
 
 
 @pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
