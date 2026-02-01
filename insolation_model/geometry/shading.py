@@ -5,9 +5,50 @@ from scipy import ndimage as nd
 from ..raster import Raster
 
 
-def get_shading_mask(
+def make_shading_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
 ) -> np.ndarray: ...
+
+
+def _make_wave_front(
+    n_rows_to_cover: int,
+    n_cols_to_cover: int,
+    azimuth: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Find the discretized locations for a wave front that will cover a raster."""
+    n_packets = int(
+        np.ceil(
+            n_cols_to_cover
+            + n_rows_to_cover * np.sin(_rad(azimuth)) * np.cos(_rad(azimuth))
+        )
+    )
+    n_fronts = int(
+        np.ceil(
+            n_rows_to_cover * np.cos(_rad(azimuth))
+            + n_cols_to_cover * np.sin(_rad(azimuth))
+        )
+    )
+    hps = 1  # horizontal packet spacing (in pixels)
+    vps = np.tan(_rad(azimuth))  # vertical packet spacing (in pixels)
+
+    i0, j0 = (
+        (n_rows_to_cover - 1)
+        * np.sin(_rad(azimuth))
+        * np.array([np.sin(_rad(azimuth)), -np.cos(_rad(azimuth))])
+    )
+    ii0 = i0 - np.arange(n_packets) * vps
+    jj0 = j0 + np.arange(n_packets) * hps
+
+    vfs = 1  # vertical front spacing (in pixels)
+    hfs = np.tan(_rad(azimuth))  # horizontal front spacing (in pixels)
+
+    Fi = np.outer(np.ones(n_fronts), ii0) + np.outer(
+        np.arange(n_fronts), np.ones(n_packets) * vfs
+    )
+    Fj = np.outer(np.ones(n_fronts), jj0) + np.outer(
+        np.arange(n_fronts), np.ones(n_packets) * hfs
+    )
+    return Fi, Fj
 
 
 def _rad(degrees: float) -> float:
