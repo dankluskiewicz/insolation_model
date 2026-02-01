@@ -16,6 +16,11 @@ def _make_wave_front(
     azimuth: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Find the discretized locations for a wave front that will cover a raster."""
+    # TODO: n_packets and n_fronts are not minimum to cover the raster.
+    if (azimuth < 0) or (azimuth > 45):
+        raise ValueError(
+            "Azimuth angle must be between 0 and 45 degrees for make_wave_front."
+        )
     n_packets = int(
         np.ceil(
             n_cols_to_cover
