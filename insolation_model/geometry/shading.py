@@ -10,10 +10,62 @@ def make_shading_mask(
 ) -> np.ndarray: ...
 
 
-def _make_wave_front(
-    n_rows_to_cover: int,
-    n_cols_to_cover: int,
+def _find_wave_front_origin(
+    raster_n_rows: int,
     azimuth: float,
+) -> np.ndarray:
+    """Find the origin of a wave front that will cover a raster.
+
+    Args:
+        raster_n_rows: The number of rows in the raster.
+        azimuth: The azimuth angle of the wave front.
+
+    Returns:
+        The origin of the wave front as a an array of shape (2,).
+    """
+    return (
+        raster_n_rows
+        * np.sin(_rad(azimuth))
+        * np.array([np.sin(_rad(azimuth)), -np.cos(_rad(azimuth))])
+    )
+
+
+def _find_wave_front_width(
+    wave_front_origin: tuple[float, float],
+    azimuth: float,
+    raster_n_cols: int,
+) -> int:
+    L1 = np.hypot(
+        *wave_front_origin
+    )  # distance from wave-front origin to raster origin
+    L2 = (raster_n_cols) * np.cos(
+        _rad(azimuth)
+    )  # distance from raster origin to the upper-right corner of the wave front
+    return L1 + L2
+
+
+def _find_wave_front_front_length(
+    wave_front_origin: tuple[float, float],
+    raster_n_rows: int,
+    raster_n_cols: int,
+    azimuth: float,
+) -> int:
+    raster_bl_corner = np.array([raster_n_rows, 0])
+    L3 = np.hypot(
+        *(raster_bl_corner - wave_front_origin)
+    )  # distance from wave-front origin to the bottom-left corner of the raster
+    L4 = (
+        (raster_n_cols) * np.sin(_rad(azimuth))
+    )  # distance from the bottom-left corner of the raster to the bottom-left corner of the wave front
+    return L3 + L4
+
+
+def _make_wave_front(
+    raster_n_rows: int,
+    raster_n_cols: int,
+    azimuth: float,
+    packet_spacing: int = 1,
+    front_spacing: int = 1,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Find the discretized locations for a wave front that will cover a raster."""
     # TODO: n_packets and n_fronts are not minimum to cover the raster.
@@ -21,31 +73,31 @@ def _make_wave_front(
         raise ValueError(
             "Azimuth angle must be between 0 and 45 degrees for make_wave_front."
         )
+    wave_front_origin = _find_wave_front_origin(raster_n_rows, azimuth)
     n_packets = int(
         np.ceil(
-            n_cols_to_cover
-            + n_rows_to_cover * np.sin(_rad(azimuth)) * np.cos(_rad(azimuth))
+            _find_wave_front_width(wave_front_origin, azimuth, raster_n_cols)
+            / packet_spacing
         )
     )
     n_fronts = int(
         np.ceil(
-            n_rows_to_cover * np.cos(_rad(azimuth))
-            + n_cols_to_cover * np.sin(_rad(azimuth))
+            _find_wave_front_front_length(
+                wave_front_origin, raster_n_rows, raster_n_cols, azimuth
+            )
+            / front_spacing
         )
     )
-    hps = 1  # horizontal packet spacing (in pixels)
-    vps = np.tan(_rad(azimuth))  # vertical packet spacing (in pixels)
 
-    i0, j0 = (
-        (n_rows_to_cover - 1)
-        * np.sin(_rad(azimuth))
-        * np.array([np.sin(_rad(azimuth)), -np.cos(_rad(azimuth))])
-    )
+    hps = np.cos(_rad(azimuth))  # horizontal packet spacing (in pixels)
+    vps = np.sin(_rad(azimuth))  # vertical packet spacing (in pixels)
+
+    i0, j0 = wave_front_origin
     ii0 = i0 - np.arange(n_packets) * vps
     jj0 = j0 + np.arange(n_packets) * hps
 
-    vfs = 1  # vertical front spacing (in pixels)
-    hfs = np.tan(_rad(azimuth))  # horizontal front spacing (in pixels)
+    vfs = hps  # vertical front spacing (in pixels)
+    hfs = vps  # horizontal front spacing (in pixels)
 
     Fi = np.outer(np.ones(n_fronts), ii0) + np.outer(
         np.arange(n_fronts), np.ones(n_packets) * vfs
