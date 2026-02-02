@@ -67,7 +67,23 @@ def _make_wave_front(
     packet_spacing: int = 1 / np.sqrt(2),
     front_spacing: int = 1 / np.sqrt(2),
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Find the discretized locations for a wave front that will cover a raster."""
+    """Find the discretized locations for a wave front that will cover a raster.
+    For this purpose, locations are in pixel space.
+    (0, 0) is the raster origin. (1, 1) is the bottom-right corner of the upper-left pixel.
+
+    Args:
+        raster_n_rows: The number of rows in the raster.
+        raster_n_cols: The number of columns in the raster.
+        azimuth: The azimuth angle of the wave front.
+        packet_spacing: The spacing between points in the same front (spacing othorgonal to azimuth).
+        front_spacing: The spacing between fronts in the wave front (spacing along azimuth).
+
+    Returns:
+        Fi: The i-coordinates of the wave front according to the raster array axes.
+            i.e. Fi[0, 0] is the horizontal distance between the wave-front and raster origins
+            in units of pixels.
+        Fj: The j-coordinates of the wave front according to the raster array axes.
+    """
     if (azimuth < 0) or (azimuth > 45):
         raise ValueError(
             "Azimuth angle must be between 0 and 45 degrees for make_wave_front."
@@ -118,29 +134,29 @@ def _get_raster_values_on_front(
 
     Args:
         raster: The raster to get the values from.
-        Fi: The i-coordinates of the wave front.
-        Fj: The j-coordinates of the wave front.
+        Fi: The i-coordinates of the wave front according to the raster array axes.
+        Fj: The j-coordinates of the wave front according to the raster array axes.
 
     Returns:
-        Fi_rounded: The rounded i-coordinates of the wave front.
-        Fj_rounded: The rounded j-coordinates of the wave front.
+        Fi_indices: The i-coordinates of the wave front rounded down to the nearest integer.
+        Fj_indices: The j-coordinates of the wave front rounded down to the nearest integer.
         Fvalues: The values of the raster on the wave front.
         valid_indices_on_front: The indices of the wave front that are inside the raster.
     """
     n_rows, n_cols = raster.arr.shape
-    Fi_rounded = np.round(Fi).astype(int)
-    Fj_rounded = np.round(Fj).astype(int)
+    Fi_indices = np.floor(Fi).astype(int)
+    Fj_indices = np.floor(Fj).astype(int)
     valid_indices_on_front = (
-        (Fi_rounded >= 0)
-        & (Fj_rounded >= 0)
-        & (Fi_rounded < n_rows)
-        & (Fj_rounded < n_cols)
+        (Fi_indices >= 0)
+        & (Fj_indices >= 0)
+        & (Fi_indices < n_rows)
+        & (Fj_indices < n_cols)
     )
     Fvalues = 0 * Fi - 9999
     Fvalues[valid_indices_on_front] = raster.arr[
-        Fi_rounded[valid_indices_on_front], Fj_rounded[valid_indices_on_front]
+        Fi_indices[valid_indices_on_front], Fj_indices[valid_indices_on_front]
     ]
-    return Fi_rounded, Fj_rounded, Fvalues, valid_indices_on_front
+    return Fi_indices, Fj_indices, Fvalues, valid_indices_on_front
 
 
 def _mean_over_indices(
