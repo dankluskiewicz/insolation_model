@@ -108,6 +108,41 @@ def _make_wave_front(
     return Fi, Fj
 
 
+def _get_raster_values_on_front(
+    raster: Raster,
+    Fi: np.ndarray,
+    Fj: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Get the values of a raster on a wave front.
+    Also returns intermediate data that are necessary to compute a shading mask.
+
+    Args:
+        raster: The raster to get the values from.
+        Fi: The i-coordinates of the wave front.
+        Fj: The j-coordinates of the wave front.
+
+    Returns:
+        Fi_rounded: The rounded i-coordinates of the wave front.
+        Fj_rounded: The rounded j-coordinates of the wave front.
+        Fvalues: The values of the raster on the wave front.
+        valid_indices_on_front: The indices of the wave front that are inside the raster.
+    """
+    n_rows, n_cols = raster.arr.shape
+    Fi_rounded = np.round(Fi).astype(int)
+    Fj_rounded = np.round(Fj).astype(int)
+    valid_indices_on_front = (
+        (Fi_rounded >= 0)
+        & (Fj_rounded >= 0)
+        & (Fi_rounded < n_rows)
+        & (Fj_rounded < n_cols)
+    )
+    Fvalues = 0 * Fi - 9999
+    Fvalues[valid_indices_on_front] = raster.arr[
+        Fi_rounded[valid_indices_on_front], Fj_rounded[valid_indices_on_front]
+    ]
+    return Fi_rounded, Fj_rounded, Fvalues, valid_indices_on_front
+
+
 def _mean_over_indices(
     ii: np.ndarray, jj: np.ndarray, values: np.ndarray
 ) -> np.ndarray:
