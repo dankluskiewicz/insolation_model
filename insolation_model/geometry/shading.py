@@ -108,6 +108,18 @@ def _make_wave_front(
     return Fi, Fj
 
 
+def _mean_over_indices(
+    ii: np.ndarray, jj: np.ndarray, values: np.ndarray
+) -> np.ndarray:
+    """Compute the mean of values for all unique pairs of indices in ii x jj."""
+    # TODO: test this
+    pairs = np.column_stack((ii, jj))
+    unique_pairs, inverse = np.unique(pairs, axis=0, return_inverse=True)
+    sums = np.bincount(inverse, weights=values)
+    counts = np.bincount(inverse)
+    return unique_pairs.T, sums / counts
+
+
 def _rad(degrees: float) -> float:
     return degrees * np.pi / 180
 
