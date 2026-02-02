@@ -5,9 +5,32 @@ from scipy import ndimage as nd
 from ..raster import Raster
 
 
-def make_shading_mask(
+def make_shade_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
 ) -> np.ndarray: ...
+
+
+def _make_shade_mask_from_horizontal_wave_front(
+    dem: Raster,
+    wave_front_azimuth_angle: float,
+) -> np.ndarray:
+    Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_azimuth_angle)
+    Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
+        _get_raster_values_on_front(dem, Fi, Fj)
+    )
+    F_cummax = np.maximum.accumulate(Fvalues, axis=0)
+    F_mask = (Fvalues < F_cummax).astype(int)
+    front_vector_i = Fi_indices[valid_indices_on_front]
+    front_vector_j = Fj_indices[valid_indices_on_front]
+    front_vector_mask = F_mask[valid_indices_on_front]
+
+    unique_pairs, mean_mask_on_front = _mean_over_indices(
+        front_vector_i, front_vector_j, front_vector_mask
+    )
+
+    shading_mask = np.zeros_like(dem.arr)
+    shading_mask[*unique_pairs] = mean_mask_on_front
+    return shading_mask
 
 
 def _find_wave_front_origin(
