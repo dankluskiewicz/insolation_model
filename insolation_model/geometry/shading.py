@@ -64,11 +64,10 @@ def _make_wave_front(
     raster_n_rows: int,
     raster_n_cols: int,
     azimuth: float,
-    packet_spacing: int = 1,
-    front_spacing: int = 1,
+    packet_spacing: int = 1 / np.sqrt(2),
+    front_spacing: int = 1 / np.sqrt(2),
 ) -> tuple[np.ndarray, np.ndarray]:
     """Find the discretized locations for a wave front that will cover a raster."""
-    # TODO: n_packets and n_fronts are not minimum to cover the raster.
     if (azimuth < 0) or (azimuth > 45):
         raise ValueError(
             "Azimuth angle must be between 0 and 45 degrees for make_wave_front."
@@ -89,15 +88,16 @@ def _make_wave_front(
         )
     )
 
-    hps = np.cos(_rad(azimuth))  # horizontal packet spacing (in pixels)
-    vps = np.sin(_rad(azimuth))  # vertical packet spacing (in pixels)
+    hps = packet_spacing * np.cos(
+        _rad(azimuth)
+    )  # horizontal packet spacing (in pixels)
+    vps = packet_spacing * np.sin(_rad(azimuth))  # vertical packet spacing (in pixels)
+    vfs = front_spacing * np.cos(_rad(azimuth))  # vertical front spacing (in pixels)
+    hfs = front_spacing * np.sin(_rad(azimuth))  # horizontal front spacing (in pixels)
 
     i0, j0 = wave_front_origin
     ii0 = i0 - np.arange(n_packets) * vps
     jj0 = j0 + np.arange(n_packets) * hps
-
-    vfs = hps  # vertical front spacing (in pixels)
-    hfs = vps  # horizontal front spacing (in pixels)
 
     Fi = np.outer(np.ones(n_fronts), ii0) + np.outer(
         np.arange(n_fronts), np.ones(n_packets) * vfs
