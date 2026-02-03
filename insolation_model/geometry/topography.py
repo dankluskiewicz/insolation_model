@@ -78,8 +78,8 @@ def dem_to_hillshade(
 
     Args:
         dem: Digital elevation model raster.
-        solar_azimuth: Light direction in degrees clockwise from north.
-        solar_elevation: Light angle in degrees above the horizon.
+        solar_azimuth: Solar azimuth angle in degrees clockwise from north.
+        solar_elevation: Solar elevation angle in degrees above the horizon.
 
     Returns:
         Raster whose values are the dot product of the surface normal unit direction and the solar unit direction, shape (n_rows, n_cols).
@@ -92,3 +92,22 @@ def dem_to_hillshade(
         surface_normal_unit_direction, solar_unit_direction
     )
     return dem.with_array(surface_angle_coefficient)
+
+
+def dem_to_insolation_coefficient(
+    dem: Raster,
+    solar_azimuth: float = 315,
+    solar_elevation: float = 45,
+) -> Raster:
+    """Compute the coefficient that corrects solar flux for the angle of the ground surface.
+
+    Returns an raster whose values are in [0, 1]. 0 is shaded. 1 is fully illuminated.
+    Shape (n_rows, n_cols)
+
+    Args:
+        dem: Digital elevation model raster.
+        solar_azimuth: Solar azimuth angle in degrees clockwise from north.
+        solar_elevation: Solar elevation angle in degrees above the horizon.
+    """
+    hillshade = dem_to_hillshade(dem, solar_azimuth, solar_elevation)
+    return hillshade.with_array(np.maximum(0, hillshade.arr))
