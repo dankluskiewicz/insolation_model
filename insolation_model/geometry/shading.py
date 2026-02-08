@@ -12,9 +12,9 @@ def make_shade_mask(
 
 def _make_shade_mask_from_horizontal_wave_front(
     dem: Raster,
-    wave_front_azimuth_angle: float,
+    wave_front_theta: float,
 ) -> np.ndarray:
-    Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_azimuth_angle)
+    Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_theta)
     Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
         _get_raster_values_on_front(dem, Fi, Fj)
     )
@@ -35,34 +35,35 @@ def _make_shade_mask_from_horizontal_wave_front(
 
 def _find_wave_front_origin(
     raster_n_rows: int,
-    azimuth: float,
+    theta: float,
 ) -> np.ndarray:
     """Find the origin of a wave front that will cover a raster.
 
     Args:
         raster_n_rows: The number of rows in the raster.
-        azimuth: The azimuth angle of the wave front.
+        theta: The azimuth angle of the wave front in degrees counterclockwise from North.
+               This is called "theta" to distinguish from solar azimuth, which is measured clockwise from North.
 
     Returns:
         The origin of the wave front as a an array of shape (2,).
     """
     return (
         raster_n_rows
-        * np.sin(_rad(azimuth))
-        * np.array([np.sin(_rad(azimuth)), -np.cos(_rad(azimuth))])
+        * np.sin(_rad(theta))
+        * np.array([np.sin(_rad(theta)), -np.cos(_rad(theta))])
     )
 
 
 def _find_wave_front_width(
     wave_front_origin: tuple[float, float],
-    azimuth: float,
+    theta: float,
     raster_n_cols: int,
 ) -> int:
     L1 = np.hypot(
         *wave_front_origin
     )  # distance from wave-front origin to raster origin
     L2 = (raster_n_cols) * np.cos(
-        _rad(azimuth)
+        _rad(theta)
     )  # distance from raster origin to the upper-right corner of the wave front
     return L1 + L2
 
@@ -71,14 +72,14 @@ def _find_wave_front_front_length(
     wave_front_origin: tuple[float, float],
     raster_n_rows: int,
     raster_n_cols: int,
-    azimuth: float,
+    theta: float,
 ) -> int:
     raster_bl_corner = np.array([raster_n_rows, 0])
     L3 = np.hypot(
         *(raster_bl_corner - wave_front_origin)
     )  # distance from wave-front origin to the bottom-left corner of the raster
     L4 = (
-        (raster_n_cols) * np.sin(_rad(azimuth))
+        (raster_n_cols) * np.sin(_rad(theta))
     )  # distance from the bottom-left corner of the raster to the bottom-left corner of the wave front
     return L3 + L4
 
@@ -86,7 +87,7 @@ def _find_wave_front_front_length(
 def _make_wave_front(
     raster_n_rows: int,
     raster_n_cols: int,
-    azimuth: float,
+    theta: float,
     packet_spacing: int = 1 / np.sqrt(2),
     front_spacing: int = 1 / np.sqrt(2),
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -94,12 +95,17 @@ def _make_wave_front(
     For this purpose, locations are in pixel space.
     (0, 0) is the raster origin. (1, 1) is the bottom-right corner of the upper-left pixel.
 
+    By "wave front", I just mean points on a grid that is at an angle theta from the the
+    relevant raster grid. Each row of this grid can be thought of as a temporal snapshot of a wave front
+    as it moves across the raster.
+
     Args:
         raster_n_rows: The number of rows in the raster.
         raster_n_cols: The number of columns in the raster.
-        azimuth: The azimuth angle of the wave front.
-        packet_spacing: The spacing between points in the same front (spacing othorgonal to azimuth).
-        front_spacing: The spacing between fronts in the wave front (spacing along azimuth).
+        theta: (float in [0, 45]) The azimuth angle of the wave front in degrees counterclockwise from North.
+               This is called "theta" to distinguish from solar azimuth, which is measured clockwise from North.
+        packet_spacing: The spacing between points parallel to the front (spacing othorgonal to theta).
+        front_spacing: The spacing between points orthogonal to the front (spacing along theta).
 
     Returns:
         Fi: The i-coordinates of the wave front according to the raster array axes.
@@ -107,32 +113,28 @@ def _make_wave_front(
             in units of pixels.
         Fj: The j-coordinates of the wave front according to the raster array axes.
     """
-    if (azimuth < 0) or (azimuth > 45):
-        raise ValueError(
-            "Azimuth angle must be between 0 and 45 degrees for make_wave_front."
-        )
-    wave_front_origin = _find_wave_front_origin(raster_n_rows, azimuth)
+    if (theta < 0) or (theta > 45):
+        raise ValueError("Theta must be between 0 and 45 degrees for make_wave_front.")
+    wave_front_origin = _find_wave_front_origin(raster_n_rows, theta)
     n_packets = int(
         np.ceil(
-            _find_wave_front_width(wave_front_origin, azimuth, raster_n_cols)
+            _find_wave_front_width(wave_front_origin, theta, raster_n_cols)
             / packet_spacing
         )
     )
     n_fronts = int(
         np.ceil(
             _find_wave_front_front_length(
-                wave_front_origin, raster_n_rows, raster_n_cols, azimuth
+                wave_front_origin, raster_n_rows, raster_n_cols, theta
             )
             / front_spacing
         )
     )
 
-    hps = packet_spacing * np.cos(
-        _rad(azimuth)
-    )  # horizontal packet spacing (in pixels)
-    vps = packet_spacing * np.sin(_rad(azimuth))  # vertical packet spacing (in pixels)
-    vfs = front_spacing * np.cos(_rad(azimuth))  # vertical front spacing (in pixels)
-    hfs = front_spacing * np.sin(_rad(azimuth))  # horizontal front spacing (in pixels)
+    hps = packet_spacing * np.cos(_rad(theta))  # horizontal packet spacing (in pixels)
+    vps = packet_spacing * np.sin(_rad(theta))  # vertical packet spacing (in pixels)
+    vfs = front_spacing * np.cos(_rad(theta))  # vertical front spacing (in pixels)
+    hfs = front_spacing * np.sin(_rad(theta))  # horizontal front spacing (in pixels)
 
     i0, j0 = wave_front_origin
     ii0 = i0 - np.arange(n_packets) * vps
