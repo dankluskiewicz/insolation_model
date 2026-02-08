@@ -53,10 +53,7 @@ def hillshade(
     hill_shade = dem_to_hillshade(
         dem, solar_azimuth=solar_azimuth, solar_elevation=solar_elevation
     )
-
-    imshow_kwargs = {"cmap": "viridis", "vmin": -1, "vmax": 1}
-    imshow_kwargs.update(kwargs)
-    return raster(hill_shade, ax=ax, cbar=cbar, **imshow_kwargs)
+    return raster(hill_shade, ax=ax, cbar=cbar, **kwargs)
 
 
 def _get_ax(ax: Axes | None) -> Axes:

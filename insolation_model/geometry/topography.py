@@ -22,11 +22,11 @@ def _gradient_vector_to_surface_normal_unit_direction(
     slope = np.arctan(np.hypot(grad_x, grad_y))
     norm_horizontal_component = np.sin(slope)
     return (
-        np.sign(grad_x)
+        -np.sign(grad_x)
         * np.sqrt(norm_horizontal_component**2 / (1 + (grad_y / grad_x) ** 2))
         if grad_x != 0
         else 0,
-        np.sign(grad_y)
+        -np.sign(grad_y)
         * np.sqrt(norm_horizontal_component**2 / (1 + (grad_x / grad_y) ** 2))
         if grad_y != 0
         else 0,
@@ -34,17 +34,19 @@ def _gradient_vector_to_surface_normal_unit_direction(
     )  # norm_x, norm_y, norm_z
 
 
-def _get_surface_angle_insolation_coefficient(
+def _get_dot_product_of_surface_normal_and_solar_unit_directions(
     surface_normal_unit_direction: np.ndarray, solar_unit_direction: np.ndarray
 ) -> float:
-    """Get the coefficient that corrects solar flux for the angle of the ground surface.
+    """Get the dot product of the surface normal unit direction and the solar unit direction.
+    Saturate from below at 0 to use this as a coefficient that corrects solar flux for the angle of the ground surface,
+    or use it directly to for shaded relief visuals.
 
     Args:
         surface_normal_unit_direction: The unit vector that is perpendicular to the surface, shape (3, n_rows, n_cols).
         solar_unit_direction: The unit vector that is pointing from the surface to the sun, shape (3,).
 
     Returns:
-        The coefficient that corrects solar flux for the angle of the ground surface, shape (n_rows, n_cols).
+        The dot product of the surface normal unit direction and the solar unit direction, shape (n_rows, n_cols).
     """
     return (
         surface_normal_unit_direction * solar_unit_direction[:, np.newaxis, np.newaxis]
@@ -88,8 +90,10 @@ def dem_to_hillshade(
     solar_unit_direction = _get_solar_unit_direction_from_angular_position(
         solar_azimuth, solar_elevation
     )
-    surface_angle_coefficient = _get_surface_angle_insolation_coefficient(
-        surface_normal_unit_direction, solar_unit_direction
+    surface_angle_coefficient = (
+        _get_dot_product_of_surface_normal_and_solar_unit_directions(
+            surface_normal_unit_direction, solar_unit_direction
+        )
     )
     return dem.with_array(surface_angle_coefficient)
 

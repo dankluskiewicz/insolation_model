@@ -18,6 +18,11 @@ def test_dem_to_gradient(prescribed_grad_x, prescribed_grad_y, dx):
     assert np.isclose(measured_grad_y, prescribed_grad_y).all()
 
 
+def _gradients_to_grad_vector(grad_x, grad_y):
+    gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+    return np.array([grad_x, grad_y, gradient_magnitude * np.hypot(grad_x, grad_y)])
+
+
 @pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
 @pytest.mark.parametrize("prescribed_grad_y", [0, 1, -1, 3])
 def test_gradient_vector_to_surface_normal_unit_direction(
@@ -29,14 +34,7 @@ def test_gradient_vector_to_surface_normal_unit_direction(
         )
     )
     # need a vector that points along the surface gradient
-    gradient_magnitude = np.sqrt(prescribed_grad_x**2 + prescribed_grad_y**2)
-    grad_vector = np.array(
-        [
-            prescribed_grad_x,
-            prescribed_grad_y,
-            -gradient_magnitude * np.hypot(prescribed_grad_x, prescribed_grad_y),
-        ]
-    )
+    grad_vector = _gradients_to_grad_vector(prescribed_grad_x, prescribed_grad_y)
     assert np.isclose(np.linalg.norm(unit_norm), 1.0, atol=1e-5).all(), (
         "The surface normal unit direction is not a unit vector"
     )
@@ -56,13 +54,24 @@ def test_dem_to_surface_normal_unit_direction(prescribed_grad_x, prescribed_grad
     # need an array of vectors that point along the surface gradient
     # I'm using caps to denote the gradient array that I infer form the DEM, as opposed to the prescribed gradient values.
     GradX, GradY = dem_to_gradient(dem)
-    gradient_magnitude = np.sqrt(GradX**2 + GradY**2)
-    grad_vector = np.array([GradX, GradY, -gradient_magnitude * np.hypot(GradX, GradY)])
+    grad_vector = _gradients_to_grad_vector(GradX, GradY)
     assert np.isclose(np.linalg.norm(unit_norm, axis=0), 1.0, atol=1e-5).all(), (
         "The surface normal unit direction is not a unit vector. \n"
         f"{prescribed_grad_x=}, {prescribed_grad_y=}\n"
         f"unit_norm: {unit_norm}\n"
     )
     assert np.isclose(np.sum(unit_norm * grad_vector, axis=0), 0.0, atol=1e-5).all(), (
-        "The surface normal unit direction is not perpendicular to the gradient"
+        "The surface normal unit direction is not perpendicular to the gradient",
+        # f"grad_vector: {grad_vector}\n"
+        # f"unit_norm: {unit_norm}\n"
+        # f"gradient_magnitude: {gradient_magnitude}\n"
+    )
+    assert (unit_norm[2] > 0.0).all(), (
+        "The surface normal unit direction is not pointing upwards."
+    )
+    assert (np.sign(unit_norm[0]) == -np.sign(prescribed_grad_x)).all(), (
+        "The surface normal unit direction is not pointing in the correct x direction."
+    )
+    assert (np.sign(unit_norm[1]) == -np.sign(prescribed_grad_y)).all(), (
+        "The surface normal unit direction is not pointing in the correct y direction."
     )
