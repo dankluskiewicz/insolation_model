@@ -247,3 +247,17 @@ def make_dem_with_gradients(
         transform=transform,
         crs=rasterio.crs.CRS.from_epsg(4326),
     )
+
+
+def _add_gradient_to_dem(
+    dem: Raster,
+    grad_x: float,
+    grad_y: float,
+) -> Raster:
+    return dem.with_array(
+        dem.arr
+        + np.vstack([np.arange(dem.arr.shape[1])] * dem.arr.shape[0]) * grad_x * dem.dx
+        - np.vstack([np.arange(dem.arr.shape[0])] * dem.arr.shape[1]).transpose()
+        * grad_y
+        * dem.dy
+    )
