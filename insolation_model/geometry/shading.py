@@ -6,7 +6,26 @@ from ..raster import Raster
 
 def make_shade_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
-) -> np.ndarray: ...
+) -> np.ndarray:
+    if not (0 <= solar_elevation_angle <= 90):
+        raise ValueError("Solar elevation angle must be between 0 and 90 degrees")
+    if not (0 <= solar_azimuth_angle <= 360):
+        raise ValueError("Solar azimuth angle must be between 0 and 360 degrees")
+    if solar_elevation_angle == 90:
+        return np.ones(dem.arr.shape, dtype=int)
+    if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
+        return _make_shade_mask_from_horizontal_wave_front(
+            _add_gradient_to_dem(
+                dem,
+                *(
+                    -_gradient_for_slope_that_parallels_solar_elevation(
+                        solar_elevation_angle, solar_azimuth_angle
+                    )
+                ),
+            ),
+            -solar_azimuth_angle % 360,
+        )
+    raise ValueError(f"Solar azimuth angle {solar_azimuth_angle} is not supported")
 
 
 def _make_shade_mask_from_horizontal_wave_front(
@@ -216,14 +235,14 @@ def _fill_nans_with_nearest_neighbor(arr: np.ndarray) -> np.ndarray:
 
 def _gradient_for_slope_that_parallels_solar_elevation(
     elevation_angle: float, azimuth_angle: float
-) -> float:
+) -> np.ndarray:
     if elevation_angle <= 0:
         raise ValueError("Elevation angle must be greater than 0")
     if elevation_angle >= 90:
         raise ValueError("Elevation angle must be less than 90")
     grad_x = np.sin(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
     grad_y = np.cos(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
-    return grad_x, grad_y
+    return np.array([grad_x, grad_y])
 
 
 def _add_gradient_to_dem(
