@@ -22,11 +22,11 @@ def _gradient_vector_to_surface_normal_unit_direction(
     slope = np.arctan(np.hypot(grad_x, grad_y))
     norm_horizontal_component = np.sin(slope)
     return (
-        np.sign(grad_x)
+        -np.sign(grad_x)
         * np.sqrt(norm_horizontal_component**2 / (1 + (grad_y / grad_x) ** 2))
         if grad_x != 0
         else 0,
-        np.sign(grad_y)
+        -np.sign(grad_y)
         * np.sqrt(norm_horizontal_component**2 / (1 + (grad_x / grad_y) ** 2))
         if grad_y != 0
         else 0,
