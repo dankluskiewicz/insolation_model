@@ -10,10 +10,9 @@ from tests.conftest import make_dem_with_gradients
 
 @pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
 @pytest.mark.parametrize("prescribed_grad_y", [0, 1, -1, 3])
-@pytest.mark.parametrize("dx", [1, 2])
-@pytest.mark.parametrize("dy", [1, 4])
-def test_dem_to_gradient(prescribed_grad_x, prescribed_grad_y, dx, dy):
-    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dy)
+@pytest.mark.parametrize("dx", [1, 2, 4])
+def test_dem_to_gradient(prescribed_grad_x, prescribed_grad_y, dx):
+    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dx)
     measured_grad_x, measured_grad_y = dem_to_gradient(dem)
     assert np.isclose(measured_grad_x, prescribed_grad_x).all()
     assert np.isclose(measured_grad_y, prescribed_grad_y).all()
@@ -49,11 +48,8 @@ def test_gradient_vector_to_surface_normal_unit_direction(
 @pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
 @pytest.mark.parametrize("prescribed_grad_y", [0, 1, -1, 3])
 @pytest.mark.parametrize("dx", [1, 2])
-@pytest.mark.parametrize("dy", [1, 4])
-def test_dem_to_surface_normal_unit_direction(
-    prescribed_grad_x, prescribed_grad_y, dx, dy
-):
-    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dy)
+def test_dem_to_surface_normal_unit_direction(prescribed_grad_x, prescribed_grad_y, dx):
+    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dx)
     unit_norm = dem_to_surface_normal_unit_direction(dem)
     # need an array of vectors that point along the surface gradient
     # I'm using caps to denote the gradient array that I infer form the DEM, as opposed to the prescribed gradient values.

@@ -1,50 +1,217 @@
 import numpy as np
-import rasterio
-import pyproj
 from scipy import ndimage as nd
+
 from ..raster import Raster
-from .topography import dem_to_gradient
 
 
-def get_shading_mask(
+def make_shade_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
 ) -> np.ndarray:
-    """Get the shading mask for a DEM, given a solar position.
-    The azimuth angle is the counterclockwise angle between the sun and the north direction.
-    The elevation angle is the angle between the sun and the horizon.
-    The mask is 1 for unshaded cells and 0 for shaded cells. Some cells may have partial shading.
-
-    This function works by creating a point representation of the DEM, rotating the points around the z-axis so that the DEM y axis
-    is parallel to the solar azimuth angle, then converting back to a raster,
-    adding a y-gradient to the raster to account for the solar elevation angle, and then creating a mask
-    from cumulative maximum elevation of the transformed DEM. This is more convoluted than I originally expected it to be,
-    and for the sake of simplicity it would be worth trying a completely different approach.
-    """
+    if not (0 <= solar_elevation_angle <= 90):
+        raise ValueError("Solar elevation angle must be between 0 and 90 degrees")
+    if not (0 <= solar_azimuth_angle <= 360):
+        raise ValueError("Solar azimuth angle must be between 0 and 360 degrees")
     if solar_elevation_angle == 90:
-        return np.ones(dem.arr.shape, dtype=float)
-    doubled_dem = _double_resolution_of_raster(dem)
-    doubled_dem_points = _point_representation_of_dem(doubled_dem)
-    rotated_doubled_dem_points = _rotate_points_around_z_axis(
-        doubled_dem_points, solar_azimuth_angle
+        return np.ones(dem.arr.shape, dtype=int)
+    if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
+        return _make_shade_mask_from_horizontal_wave_front(
+            _add_gradient_to_dem(
+                dem,
+                *(
+                    -_gradient_for_slope_that_parallels_solar_elevation(
+                        solar_elevation_angle, solar_azimuth_angle
+                    )
+                ),
+            ),
+            -solar_azimuth_angle % 360,
+        )
+    raise ValueError(f"Solar azimuth angle {solar_azimuth_angle} is not supported")
+
+
+def _make_shade_mask_from_horizontal_wave_front(
+    dem: Raster,
+    wave_front_theta: float,
+) -> np.ndarray:
+    Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_theta)
+    Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
+        _get_raster_values_on_front(dem, Fi, Fj)
     )
-    rotated_dem = _raster_representation_of_points_mean_z(
-        rotated_doubled_dem_points,
-        dem.dx,
-        dem.dy,
-        *_rotate_raster_corners_around_z_axis(dem, solar_azimuth_angle),
-        crs=dem.crs,
+    F_cummax = np.maximum.accumulate(Fvalues, axis=0)
+    F_mask = (Fvalues < F_cummax).astype(int)
+    front_vector_i = Fi_indices[valid_indices_on_front]
+    front_vector_j = Fj_indices[valid_indices_on_front]
+    front_vector_mask = F_mask[valid_indices_on_front]
+
+    unique_pairs, mean_mask_on_front = _mean_over_indices(
+        front_vector_i, front_vector_j, front_vector_mask
     )
-    rotated_mask = _shading_mask_from_sun_at_north_horizon(
-        _add_y_gradient(
-            rotated_dem, _gradient_from_elevation_angle(solar_elevation_angle)
+
+    shading_mask = np.zeros_like(dem.arr)
+    shading_mask[*unique_pairs] = mean_mask_on_front
+    return shading_mask
+
+
+def _find_wave_front_origin(
+    raster_n_rows: int,
+    theta: float,
+) -> np.ndarray:
+    """Find the origin of a wave front that will cover a raster.
+
+    Args:
+        raster_n_rows: The number of rows in the raster.
+        theta: The azimuth angle of the wave front in degrees counterclockwise from North.
+               This is called "theta" to distinguish from solar azimuth, which is measured clockwise from North.
+
+    Returns:
+        The origin of the wave front as a an array of shape (2,).
+    """
+    return (
+        raster_n_rows
+        * np.sin(_rad(theta))
+        * np.array([np.sin(_rad(theta)), -np.cos(_rad(theta))])
+    )
+
+
+def _find_wave_front_width(
+    wave_front_origin: tuple[float, float],
+    theta: float,
+    raster_n_cols: int,
+) -> int:
+    L1 = np.hypot(
+        *wave_front_origin
+    )  # distance from wave-front origin to raster origin
+    L2 = (raster_n_cols) * np.cos(
+        _rad(theta)
+    )  # distance from raster origin to the upper-right corner of the wave front
+    return L1 + L2
+
+
+def _find_wave_front_front_length(
+    wave_front_origin: tuple[float, float],
+    raster_n_rows: int,
+    raster_n_cols: int,
+    theta: float,
+) -> int:
+    raster_bl_corner = np.array([raster_n_rows, 0])
+    L3 = np.hypot(
+        *(raster_bl_corner - wave_front_origin)
+    )  # distance from wave-front origin to the bottom-left corner of the raster
+    L4 = (
+        (raster_n_cols) * np.sin(_rad(theta))
+    )  # distance from the bottom-left corner of the raster to the bottom-left corner of the wave front
+    return L3 + L4
+
+
+def _make_wave_front(
+    raster_n_rows: int,
+    raster_n_cols: int,
+    theta: float,
+    packet_spacing: int = 1 / np.sqrt(2),
+    front_spacing: int = 1 / np.sqrt(2),
+) -> tuple[np.ndarray, np.ndarray]:
+    """Find the discretized locations for a wave front that will cover a raster.
+    For this purpose, locations are in pixel space.
+    (0, 0) is the raster origin. (1, 1) is the bottom-right corner of the upper-left pixel.
+
+    By "wave front", I just mean points on a grid that is at an angle theta from the the
+    relevant raster grid. Each row of this grid can be thought of as a temporal snapshot of a wave front
+    as it moves across the raster.
+
+    Args:
+        raster_n_rows: The number of rows in the raster.
+        raster_n_cols: The number of columns in the raster.
+        theta: (float in [0, 45]) The azimuth angle of the wave front in degrees counterclockwise from North.
+               This is called "theta" to distinguish from solar azimuth, which is measured clockwise from North.
+        packet_spacing: The spacing between points parallel to the front (spacing othorgonal to theta).
+        front_spacing: The spacing between points orthogonal to the front (spacing along theta).
+
+    Returns:
+        Fi: The i-coordinates of the wave front according to the raster array axes.
+            i.e. Fi[0, 0] is the horizontal distance between the wave-front and raster origins
+            in units of pixels.
+        Fj: The j-coordinates of the wave front according to the raster array axes.
+    """
+    if (theta < 0) or (theta > 45):
+        raise ValueError("Theta must be between 0 and 45 degrees for make_wave_front.")
+    wave_front_origin = _find_wave_front_origin(raster_n_rows, theta)
+    n_packets = int(
+        np.ceil(
+            _find_wave_front_width(wave_front_origin, theta, raster_n_cols)
+            / packet_spacing
         )
     )
-    point_mask = _raster_values_at_points(
-        rotated_mask, rotated_doubled_dem_points[0, :], rotated_doubled_dem_points[1, :]
+    n_fronts = int(
+        np.ceil(
+            _find_wave_front_front_length(
+                wave_front_origin, raster_n_rows, raster_n_cols, theta
+            )
+            / front_spacing
+        )
     )
-    return _halve_resolution_of_an_array(
-        _unflatten_vector_to_raster_dimensions(point_mask, *doubled_dem.arr.shape)
+
+    hps = packet_spacing * np.cos(_rad(theta))  # horizontal packet spacing (in pixels)
+    vps = packet_spacing * np.sin(_rad(theta))  # vertical packet spacing (in pixels)
+    vfs = front_spacing * np.cos(_rad(theta))  # vertical front spacing (in pixels)
+    hfs = front_spacing * np.sin(_rad(theta))  # horizontal front spacing (in pixels)
+
+    i0, j0 = wave_front_origin
+    ii0 = i0 - np.arange(n_packets) * vps
+    jj0 = j0 + np.arange(n_packets) * hps
+
+    Fi = np.outer(np.ones(n_fronts), ii0) + np.outer(
+        np.arange(n_fronts), np.ones(n_packets) * vfs
     )
+    Fj = np.outer(np.ones(n_fronts), jj0) + np.outer(
+        np.arange(n_fronts), np.ones(n_packets) * hfs
+    )
+    return Fi, Fj
+
+
+def _get_raster_values_on_front(
+    raster: Raster,
+    Fi: np.ndarray,
+    Fj: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Get the values of a raster on a wave front.
+    Also returns intermediate data that are necessary to compute a shading mask.
+
+    Args:
+        raster: The raster to get the values from.
+        Fi: The i-coordinates of the wave front according to the raster array axes.
+        Fj: The j-coordinates of the wave front according to the raster array axes.
+
+    Returns:
+        Fi_indices: The i-coordinates of the wave front rounded down to the nearest integer.
+        Fj_indices: The j-coordinates of the wave front rounded down to the nearest integer.
+        Fvalues: The values of the raster on the wave front.
+        valid_indices_on_front: The indices of the wave front that are inside the raster.
+    """
+    n_rows, n_cols = raster.arr.shape
+    Fi_indices = np.floor(Fi).astype(int)
+    Fj_indices = np.floor(Fj).astype(int)
+    valid_indices_on_front = (
+        (Fi_indices >= 0)
+        & (Fj_indices >= 0)
+        & (Fi_indices < n_rows)
+        & (Fj_indices < n_cols)
+    )
+    Fvalues = 0 * Fi - 9999
+    Fvalues[valid_indices_on_front] = raster.arr[
+        Fi_indices[valid_indices_on_front], Fj_indices[valid_indices_on_front]
+    ]
+    return Fi_indices, Fj_indices, Fvalues, valid_indices_on_front
+
+
+def _mean_over_indices(
+    ii: np.ndarray, jj: np.ndarray, values: np.ndarray
+) -> np.ndarray:
+    """Compute the mean of values for all unique pairs of indices in ii x jj."""
+    # TODO: test this
+    pairs = np.column_stack((ii, jj))
+    unique_pairs, inverse = np.unique(pairs, axis=0, return_inverse=True)
+    sums = np.bincount(inverse, weights=values)
+    counts = np.bincount(inverse)
+    return unique_pairs.T, sums / counts
 
 
 def _rad(degrees: float) -> float:
@@ -66,214 +233,27 @@ def _fill_nans_with_nearest_neighbor(arr: np.ndarray) -> np.ndarray:
     return arr[tuple(indices)]
 
 
-def _point_representation_of_dem(dem: Raster) -> np.ndarray:
-    """Create a point representation of a DEM.
-    The representation XYZ is an arrary of shape (3, N) like [X, Y, Z],
-    where each of X, Y, and Z is a 1D array whose length is the number of cells in the dem grid.
-    """
-    X = np.vstack(
-        [dem.transform.c + dem.dx * (np.arange(dem.arr.shape[1]) + 0.5)]
-        * dem.arr.shape[0]
-    )
-    Y = np.vstack(
-        [dem.transform.f - dem.dy * (np.arange(dem.arr.shape[0]) + 0.5)]
-        * dem.arr.shape[1]
-    ).transpose()
-    Z = dem.arr
-    return np.stack([X.flatten(), Y.flatten(), Z.flatten()], axis=0)
+def _gradient_for_slope_that_parallels_solar_elevation(
+    elevation_angle: float, azimuth_angle: float
+) -> np.ndarray:
+    if elevation_angle <= 0:
+        raise ValueError("Elevation angle must be greater than 0")
+    if elevation_angle >= 90:
+        raise ValueError("Elevation angle must be less than 90")
+    grad_x = np.sin(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
+    grad_y = np.cos(_rad(azimuth_angle)) * np.tan(_rad(elevation_angle))
+    return np.array([grad_x, grad_y])
 
 
-def _rotate_points_around_z_axis(XYZ: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate points XYZ counterclockwise around the z-axis.
-
-    Args:
-        XYZ: Array of shape (3, N) where rows are [X, Y, Z]
-        angle: Angle in degrees to rotate counterclockwise around the z-axis
-
-    Returns:
-        Array of shape (3, N) where rows are the rotated [X, Y, Z]
-    """
-    rotation_matrix = np.array(
-        [
-            [np.cos(_rad(angle)), -np.sin(_rad(angle)), 0],
-            [np.sin(_rad(angle)), np.cos(_rad(angle)), 0],
-            [0, 0, 1],
-        ]
-    )
-    return np.dot(rotation_matrix, XYZ)
-
-
-def _raster_representation_of_points_mean_z(
-    XYZ: np.ndarray,
-    dx: float,
-    dy: float,
-    xmin: float,
-    ymin: float,
-    xmax: float,
-    ymax: float,
-    crs: pyproj.CRS | None = None,
+def _add_gradient_to_dem(
+    dem: Raster,
+    grad_x: float,
+    grad_y: float,
 ) -> Raster:
-    """Convert a 3D array of XYZ points to a Raster using mean of Z values per cell.
-    Arg XYZ is an array of shape (3, N) where rows are [X, Y, Z]
-    Returns a Raster with array values being the mean Z value for points that coincide with each grid cell.
-    Cells with no points will have NaN values.
-    """
-    X, Y, Z = XYZ[0, :], XYZ[1, :], XYZ[2, :]
-
-    n_cols = int(np.ceil((xmax - xmin) / dx))
-    n_rows = int(np.ceil((ymax - ymin) / dy))
-
-    col_indices = np.floor((X - xmin) / dx).astype(int)
-    row_indices = np.floor((ymax - Y) / dy).astype(int)
-
-    # Compute mean Z value for each cell using bincount
-    # Sum all Z values for each unique flat_index
-    flat_indices = row_indices * n_cols + col_indices
-    n_cells = n_rows * n_cols
-    sums = np.bincount(flat_indices, weights=Z, minlength=n_cells)
-    counts = np.bincount(flat_indices, minlength=n_cells)
-    # Use np.divide with where to avoid division by zero warning
-    means = np.divide(sums, counts, out=np.full(n_cells, np.nan), where=counts > 0)
-    raster_arr = _unflatten_vector_to_raster_dimensions(means, n_rows, n_cols)
-
-    transform = rasterio.Affine(dx, 0.0, xmin, 0.0, -dy, ymax)
-
-    return Raster(arr=raster_arr, transform=transform, crs=crs)
-
-
-def _rotate_raster_corners_around_z_axis(
-    dem: Raster, angle: float
-) -> tuple[float, float, float, float]:
-    xmin, ymin, xmax, ymax = dem.bounds
-    corners = np.array(
-        [[xmin, xmin, xmax, xmax], [ymin, ymax, ymin, ymax], [0, 0, 0, 0]]
-    )
-    rotated_corners = _rotate_points_around_z_axis(corners, angle)
-    rotated_xmin = np.min(rotated_corners[0, :])
-    rotated_xmax = np.max(rotated_corners[0, :])
-    rotated_ymin = np.min(rotated_corners[1, :])
-    rotated_ymax = np.max(rotated_corners[1, :])
-    return rotated_xmin, rotated_ymin, rotated_xmax, rotated_ymax
-
-
-def _add_y_gradient(dem: Raster, gradient: float) -> Raster:
-    """Add a y-gradient to a DEM."""
-    new_dem = dem.copy()
-    n_rows, n_cols = new_dem.arr.shape
-    new_dem.arr -= (
-        np.vstack([np.arange(n_rows)] * n_cols).transpose().astype(float)
-        * gradient
-        * new_dem.dy
-    )
-    return new_dem
-
-
-def _gradient_from_elevation_angle(elevation_angle: float) -> float:
-    """Get the gradient of a slope that parallels an elevation angle.
-    Avoid infinity at 90 degrees——will need to handle 90-degree case elsewhere.
-    """
-    assert 0 <= elevation_angle < 90, (
-        f"{elevation_angle=}, elevation angle must be in [0, 90) degrees"
-    )
-    return -np.tan(_rad(elevation_angle))
-
-
-def _shading_mask_from_sun_at_north_horizon(dem: Raster) -> Raster:
-    """Create a mask showing what cells would be shaded by as sun at the north horizon.
-    The mask is 1 for unshaded cells and 0 for shaded cells.
-    """
-    _, grad_y = dem_to_gradient(dem)
-    grad_y_filled = _fill_nans_with_nearest_neighbor(grad_y)
-    mask = np.ones(dem.arr.shape, dtype=float)
-    n_rows, _ = dem.arr.shape
-    cumulative_max_elevation = _fill_nans(dem.arr[0, :], -np.inf)
-    for row_num in range(1, n_rows):
-        row_elevations = _fill_nans(dem.arr[row_num, :], -np.inf)
-        cumulative_max_elevation = np.maximum(cumulative_max_elevation, row_elevations)
-        mask[row_num, row_elevations < cumulative_max_elevation] = 0
-    mask[grad_y_filled > 0] = 0  # South facing slope will be shaded
-    mask[np.isnan(dem.arr)] = np.nan
-    return dem.with_array(mask)
-
-
-def _raster_values_at_points(
-    raster: Raster, X: np.ndarray, Y: np.ndarray
-) -> np.ndarray:
-    """Get the values of a raster at points [X, Y].
-
-    Args:
-        raster: Raster
-        X: array of shape (N,) where the i-th element is the X coordinate of the i-th point
-        Y: array of shape (N,) where the i-th element is the Y coordinate of the i-th point
-    Returns:
-        Array of shape (N,) where the i-th element is the value of the raster at the point [X[i], Y[i]]
-    """
-    col_indices = np.floor((X - raster.transform.c) / raster.dx).astype(int)
-    row_indices = np.floor((Y - raster.transform.f) / (-raster.dy)).astype(int)
-    return raster.arr[row_indices, col_indices]
-
-
-def _unflatten_vector_to_raster_dimensions(
-    vector: np.ndarray, n_rows: int, n_cols: int
-) -> np.ndarray:
-    """Unflatten a vector to match the dimensions of a raster."""
-    return vector.reshape(n_rows, n_cols)
-
-
-def _double_resolution_of_array(arr: np.ndarray) -> np.ndarray:
-    """Double the resolution of an array.
-    Every cell in the input array is replaced by a 2x2 block of cells in the output array,
-    where all 4 cells in the block have the same value as the input cell.
-    """
-    # Repeat each row twice, then repeat each column twice
-    return np.repeat(np.repeat(arr, 2, axis=0), 2, axis=1)
-
-
-def _double_resolution_of_raster(raster: Raster) -> Raster:
-    """Double the resolution of a raster."""
-    new_transform = rasterio.Affine(
-        raster.dx / 2,
-        0.0,
-        raster.origin[0],
-        0.0,
-        -raster.dy / 2,
-        raster.origin[1],
-    )
-    return Raster(
-        arr=_double_resolution_of_array(raster.arr),
-        transform=new_transform,
-        crs=raster.crs,
-    )
-
-
-def _halve_resolution_of_an_array(arr: np.ndarray) -> np.ndarray:
-    """Halve the resolution of an array.
-    Every cell in the output array is the average of the 4 cells in the input array that it replaces.
-    This is the inverse of _double_resolution_of_an_array.
-    """
-    # the arrays this is applied to are always even-dimensional, and that assumption makes this easier
-    m, n = arr.shape
-    if m % 2 != 0 or n % 2 != 0:
-        raise ValueError(
-            "Array must have even number of rows and columns to halve resolution"
-        )
-    # Reshape to group 2x2 blocks: (m//2, 2, n//2, 2)
-    reshaped = arr.reshape(m // 2, 2, n // 2, 2)
-    # Take mean along the block dimensions (axes 1 and 3)
-    return reshaped.mean(axis=(1, 3))
-
-
-def _halve_resolution_of_raster(raster: Raster) -> Raster:
-    new_transform = rasterio.Affine(
-        raster.dx * 2,
-        0.0,
-        raster.origin[0],
-        0.0,
-        -raster.dy * 2,
-        raster.origin[1],
-    )
-    return Raster(
-        arr=_halve_resolution_of_an_array(raster.arr),
-        transform=new_transform,
-        crs=raster.crs,
+    return dem.with_array(
+        dem.arr
+        + np.vstack([np.arange(dem.arr.shape[1])] * dem.arr.shape[0]) * grad_x * dem.dx
+        - np.vstack([np.arange(dem.arr.shape[0])] * dem.arr.shape[1]).transpose()
+        * grad_y
+        * dem.dy
     )

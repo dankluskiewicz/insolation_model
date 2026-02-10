@@ -98,7 +98,7 @@ def dem_to_hillshade(
     return dem.with_array(surface_angle_coefficient)
 
 
-def dem_to_insolation_coefficient(
+def dem_to_topographic_flux_coefficient(
     dem: Raster,
     solar_azimuth: float = 315,
     solar_elevation: float = 45,
