@@ -82,7 +82,7 @@ class Raster:
             dst_transform=new_transform,
             src_crs=self.crs,
             dst_crs=new_crs,
-            resampling=warp.Resampling.nearest,
+            resampling=warp.Resampling.bilinear,
             src_nodata=src_nodata,
             dst_nodata=np.nan,
             init_dest_nodata=True,
