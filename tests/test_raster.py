@@ -32,8 +32,10 @@ def test_in_utm(dem):
 
 
 def test_from_tif_converts_nodata_to_nan_and_reproject_preserves_nan(tmp_path):
+    # TODO: consider creating Raster.save() method.
     path = tmp_path / "tiny_nodata.tif"
-    arr = np.array([[1.0, 0.0], [2.0, 3.0]], dtype=np.float32)
+    arr = np.ones((15, 12), dtype=np.float32)
+    arr[0, 0] = 0
     transform = rasterio.Affine(1, 0, 0, 0, -1, 0)
     with rasterio.open(
         path,
@@ -50,7 +52,8 @@ def test_from_tif_converts_nodata_to_nan_and_reproject_preserves_nan(tmp_path):
         dst.write(arr, 1)
 
     r = Raster.from_tif(path)
-    assert np.isnan(r.arr[0, 1])
+    assert np.isnan(r.arr[0, 0])
+    print(r.arr)
 
     r2 = r.reproject("EPSG:26910")
     assert np.isnan(r2.arr).any()

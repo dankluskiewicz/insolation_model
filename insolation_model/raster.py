@@ -51,7 +51,7 @@ class Raster:
 
             # Convert nodata mask to NaNs for downstream numeric ops.
             if isinstance(arr, np.ma.MaskedArray):
-                arr = arr.filled(np.nan)
+                arr = arr.astype(float).filled(np.nan)
 
             return cls(
                 arr=arr,
@@ -61,6 +61,7 @@ class Raster:
 
     def reproject(self, new_crs: str | pyproj.CRS, dx=None) -> "Raster":
         """Reproject self to a new CRS with similar spatial resolution and coverage."""
+        new_crs = _make_pyproj_crs(new_crs)
         new_transform, new_width, new_height = warp.calculate_default_transform(
             self.crs,
             new_crs,
@@ -68,7 +69,6 @@ class Raster:
             self.arr.shape[0],
             *self.bounds,
         )
-        new_crs = _make_pyproj_crs(new_crs)
         if new_width is None or new_height is None:
             raise ValueError("Could not calculate new raster dimensions")
 
