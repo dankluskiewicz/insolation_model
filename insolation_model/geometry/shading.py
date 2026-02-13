@@ -12,7 +12,7 @@ def make_shade_mask(
     if not (0 <= solar_azimuth_angle <= 360):
         raise ValueError("Solar azimuth angle must be between 0 and 360 degrees")
     if solar_elevation_angle == 90:
-        return np.ones(dem.arr.shape, dtype=int)
+        return np.zeros(dem.arr.shape, dtype=int)
     if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
         return _make_shade_mask_from_horizontal_wave_front(
             _add_gradient_to_dem(
@@ -32,6 +32,24 @@ def _make_shade_mask_from_horizontal_wave_front(
     dem: Raster,
     wave_front_theta: float,
 ) -> np.ndarray:
+    """Make a shade mask that indicates which cells of dem would be shaded from the sun at
+    zero elevation angle and at a solar azimuth angle -wave_front_theta.
+    wave_front_theta is the angle of the sun in degrees counterclockwise from North,
+    which happens to be opposite the convention I've adopted for solar azimuth angles
+    called "solar_azimuth_angle".
+
+    This function exists because it's possible to compute shading for sun with a nonzero
+    elevation angle by manipulating the gradient of a DEM in a direction parallel to the
+    solar azimuth, followed by computing shading for sun with zero elevation angle. See
+    make_shade_mask.
+
+    Args:
+        dem: The digital elevation model raster.
+        wave_front_theta: The angle of the sun in degrees counterclockwise from North.
+
+    Returns:
+        A shade mask where 1 indicates shaded and 0 indicates not shaded.
+    """
     Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_theta)
     Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
         _get_raster_values_on_front(dem, Fi, Fj)

@@ -33,6 +33,7 @@ def insolation_coefficient(
 
     Returns an array whose values are in [0, 1].
     """
-    return _dem_to_topographic_flux_coefficient(
-        dem, solar_azimuth, solar_elevation
-    ) * make_shade_mask(dem, solar_azimuth, solar_elevation)
+    print("*(*(*))" * 30)
+    return _dem_to_topographic_flux_coefficient(dem, solar_azimuth, solar_elevation) * (
+        1 - make_shade_mask(dem, solar_azimuth, solar_elevation)
+    )
