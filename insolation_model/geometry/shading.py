@@ -65,7 +65,7 @@ def _make_shade_mask_from_horizontal_wave_front(
     )
 
     shading_mask = np.zeros_like(dem.arr)
-    shading_mask[*unique_pairs] = mean_mask_on_front
+    shading_mask[*unique_pairs] = (mean_mask_on_front == 1).astype(int)
     return shading_mask
 
 
@@ -222,8 +222,13 @@ def _get_raster_values_on_front(
 
 def _mean_over_indices(
     ii: np.ndarray, jj: np.ndarray, values: np.ndarray
-) -> np.ndarray:
-    """Compute the mean of values for all unique pairs of indices in ii x jj."""
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute the mean of values for all unique pairs of indices in ii x jj.
+    What this is for: You have a collection of values that are associated with
+    points (i, j) where i and j are indices of a raster. But these points are not alligned
+    with the raster grid. So you compute the mean of the values for all unique pairs of indices in ii x jj,
+    and map those mean values to the raster grid.
+    """
     # TODO: test this
     pairs = np.column_stack((ii, jj))
     unique_pairs, inverse = np.unique(pairs, axis=0, return_inverse=True)
