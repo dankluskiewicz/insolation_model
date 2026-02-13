@@ -1,6 +1,10 @@
 import pytest
 import numpy as np
-from insolation_model.geometry.shading import _make_wave_front
+from insolation_model.geometry.shading import (
+    _make_wave_front,
+    _front_spacing,
+    _packet_spacing,
+)
 
 
 @pytest.mark.parametrize("azimuth", [0, 10, 25, 40, 45])
@@ -12,4 +16,7 @@ def test_wave_front_covers_entire_raster(azimuth, n_rows, n_cols):
     assert set(np.floor(Fj).flatten().astype(int)) >= set(range(n_cols))
     # also check for reasonable economy
     front_length, front_width = Fi.shape
-    assert front_length * front_width < (np.max([n_rows, n_cols]) + 1) ** 2 * 4
+    assert (
+        front_length * front_width
+        < (np.max([n_rows, n_cols]) + 1) ** 2 * 2 / _front_spacing / _packet_spacing
+    )
