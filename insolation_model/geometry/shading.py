@@ -28,16 +28,29 @@ def make_shade_mask(
             )
         ),
     )
-    if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
-        return _make_shade_mask_from_horizontal_wave_front(
-            dem_with_added_gradient,
-            -solar_azimuth_angle % 360,
-        )
+    wave_front_theta = -solar_azimuth_angle % 360
+    rotation_angle = 90 * (wave_front_theta // 90)
+    rotated_wave_front_theta = (wave_front_theta - rotation_angle) % 360
+    rotated_dem_with_added_gradient_array = _rotate_array(
+        dem_with_added_gradient.arr, rotation_angle
+    )
+    return _rotate_array(
+        _make_shade_mask_from_horizontal_wave_front(
+            rotated_dem_with_added_gradient_array,
+            rotated_wave_front_theta,
+        ),
+        -rotation_angle % 360,
+    )
+    # if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
+    #     return _make_shade_mask_from_horizontal_wave_front(
+    #         dem_with_added_gradient,
+    #         -solar_azimuth_angle % 360,
+    #     )
     raise ValueError(f"Solar azimuth angle {solar_azimuth_angle} is not supported")
 
 
 def _make_shade_mask_from_horizontal_wave_front(
-    dem: Raster,
+    arr: np.ndarray,
     wave_front_theta: float,
 ) -> np.ndarray:
     """Make a shade mask that indicates which cells of dem would be shaded from the sun at
@@ -52,15 +65,15 @@ def _make_shade_mask_from_horizontal_wave_front(
     make_shade_mask.
 
     Args:
-        dem: The digital elevation model raster.
+        arr: a DEM array
         wave_front_theta: The angle of the sun in degrees counterclockwise from North.
 
     Returns:
         A shade mask where 1 indicates shaded and 0 indicates not shaded.
     """
-    Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_theta)
+    Fi, Fj = _make_wave_front(*arr.shape, wave_front_theta)
     Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
-        _get_array_values_on_front(dem.arr, Fi, Fj)
+        _get_array_values_on_front(arr, Fi, Fj)
     )
     F_cummax = np.maximum.accumulate(Fvalues, axis=0)
     F_mask = (Fvalues < F_cummax).astype(int)
@@ -72,7 +85,7 @@ def _make_shade_mask_from_horizontal_wave_front(
         front_vector_i, front_vector_j, front_vector_mask
     )
 
-    shading_mask = np.zeros_like(dem.arr)
+    shading_mask = np.zeros_like(arr)
     shading_mask[*unique_pairs] = (mean_mask_on_front == 1).astype(int)
     return shading_mask
 
@@ -146,7 +159,7 @@ def _make_wave_front(
     Args:
         raster_n_rows: The number of rows in the raster.
         raster_n_cols: The number of columns in the raster.
-        theta: (float in [0, 45]) The azimuth angle of the wave front in degrees counterclockwise from North.
+        theta: (float in [0, 90]) The azimuth angle of the wave front in degrees counterclockwise from North.
                This is called "theta" to distinguish from solar azimuth, which is measured clockwise from North.
         packet_spacing: The spacing between points parallel to the front (spacing othorgonal to theta).
         front_spacing: The spacing between points orthogonal to the front (spacing along theta).
@@ -157,8 +170,10 @@ def _make_wave_front(
             in units of pixels.
         Fj: The j-coordinates of the wave front according to the raster array axes.
     """
-    if (theta < 0) or (theta > 45):
-        raise ValueError("Theta must be between 0 and 45 degrees for make_wave_front.")
+    if (theta < 0) or (theta > 90):
+        raise ValueError(
+            f"Theta {theta} must be between 0 and 90 degrees for make_wave_front."
+        )
     wave_front_origin = _find_wave_front_origin(raster_n_rows, theta)
     n_packets = int(
         np.ceil(
@@ -288,3 +303,18 @@ def _add_gradient_to_dem(
         * grad_y
         * dem.dy
     )
+
+
+def _rotate_array(arr: np.ndarray, angle: float) -> np.ndarray:
+    """Rotate an array by a given angle in degrees counterclockwise."""
+    assert angle in [0, 90, 180, 270], ValueError(
+        f"Angle {angle} must be 0, 90, 180, or 270 degrees"
+    )
+    if angle == 0:
+        return arr
+    elif angle == 90:
+        return arr.T[::-1]
+    elif angle == 180:
+        return arr[::-1, ::-1]
+    elif angle == 270:
+        return arr.T[:, ::-1]
