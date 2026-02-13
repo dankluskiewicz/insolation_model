@@ -306,7 +306,7 @@ def _add_gradient_to_dem(
 
 
 def _rotate_array(arr: np.ndarray, angle: float) -> np.ndarray:
-    """Rotate an array by a given angle in degrees counterclockwise."""
+    """Rotate an array by an angle in degrees counterclockwise."""
     assert angle in [0, 90, 180, 270], ValueError(
         f"Angle {angle} must be 0, 90, 180, or 270 degrees"
     )
