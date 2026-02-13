@@ -20,16 +20,17 @@ def make_shade_mask(
         raise ValueError("Solar azimuth angle must be between 0 and 360 degrees")
     if solar_elevation_angle == 90:
         return np.zeros(dem.arr.shape, dtype=int)
+    dem_with_added_gradient = _add_gradient_to_dem(
+        dem,
+        *(
+            -_gradient_for_slope_that_parallels_solar_elevation(
+                solar_elevation_angle, solar_azimuth_angle
+            )
+        ),
+    )
     if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
         return _make_shade_mask_from_horizontal_wave_front(
-            _add_gradient_to_dem(
-                dem,
-                *(
-                    -_gradient_for_slope_that_parallels_solar_elevation(
-                        solar_elevation_angle, solar_azimuth_angle
-                    )
-                ),
-            ),
+            dem_with_added_gradient,
             -solar_azimuth_angle % 360,
         )
     raise ValueError(f"Solar azimuth angle {solar_azimuth_angle} is not supported")
@@ -59,7 +60,7 @@ def _make_shade_mask_from_horizontal_wave_front(
     """
     Fi, Fj = _make_wave_front(*dem.arr.shape, wave_front_theta)
     Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
-        _get_raster_values_on_front(dem, Fi, Fj)
+        _get_array_values_on_front(dem.arr, Fi, Fj)
     )
     F_cummax = np.maximum.accumulate(Fvalues, axis=0)
     F_mask = (Fvalues < F_cummax).astype(int)
@@ -192,8 +193,8 @@ def _make_wave_front(
     return Fi, Fj
 
 
-def _get_raster_values_on_front(
-    raster: Raster,
+def _get_array_values_on_front(
+    arr: np.ndarray,
     Fi: np.ndarray,
     Fj: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -201,17 +202,17 @@ def _get_raster_values_on_front(
     Also returns intermediate data that are necessary to compute a shading mask.
 
     Args:
-        raster: The raster to get the values from.
+        arr: The array to get the values from.
         Fi: The i-coordinates of the wave front according to the raster array axes.
         Fj: The j-coordinates of the wave front according to the raster array axes.
 
     Returns:
         Fi_indices: The i-coordinates of the wave front rounded down to the nearest integer.
         Fj_indices: The j-coordinates of the wave front rounded down to the nearest integer.
-        Fvalues: The values of the raster on the wave front.
+        Fvalues: The values of the array on the wave front.
         valid_indices_on_front: The indices of the wave front that are inside the raster.
     """
-    n_rows, n_cols = raster.arr.shape
+    n_rows, n_cols = arr.shape
     Fi_indices = np.floor(Fi).astype(int)
     Fj_indices = np.floor(Fj).astype(int)
     valid_indices_on_front = (
@@ -221,7 +222,7 @@ def _get_raster_values_on_front(
         & (Fj_indices < n_cols)
     )
     Fvalues = 0 * Fi - 9999
-    Fvalues[valid_indices_on_front] = raster.arr[
+    Fvalues[valid_indices_on_front] = arr[
         Fi_indices[valid_indices_on_front], Fj_indices[valid_indices_on_front]
     ]
     return Fi_indices, Fj_indices, Fvalues, valid_indices_on_front
