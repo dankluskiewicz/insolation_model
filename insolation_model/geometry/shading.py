@@ -4,6 +4,13 @@ from scipy import ndimage as nd
 from ..raster import Raster
 
 
+## According to my empirical tests, these parameters are small enough to prevent most
+## artifacts in the shading mask related to grid rotations that arise in the shading algorithm.
+
+_packet_spacing = 1 / 2.5
+_front_spacing = 1 / 2.5
+
+
 def make_shade_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
 ) -> np.ndarray:
@@ -124,8 +131,8 @@ def _make_wave_front(
     raster_n_rows: int,
     raster_n_cols: int,
     theta: float,
-    packet_spacing: int = 1 / np.sqrt(2),
-    front_spacing: int = 1 / np.sqrt(2),
+    packet_spacing: int = _packet_spacing,
+    front_spacing: int = _front_spacing,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Find the discretized locations for a wave front that will cover a raster.
     For this purpose, locations are in pixel space.
