@@ -7,7 +7,7 @@ from insolation_model.geometry.shading import (
 )
 
 
-@pytest.mark.parametrize("azimuth", [0, 10, 25, 40, 45])
+@pytest.mark.parametrize("azimuth", [0, 10, 25, 40, 45, 55, 65, 75, 85, 90])
 @pytest.mark.parametrize("n_rows", [3, 9, 23, 117])
 @pytest.mark.parametrize("n_cols", [3, 11, 17, 113])
 def test_wave_front_covers_entire_raster(azimuth, n_rows, n_cols):
