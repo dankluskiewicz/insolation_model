@@ -41,12 +41,6 @@ def make_shade_mask(
         ),
         -rotation_angle % 360,
     )
-    # if (315 <= solar_azimuth_angle <= 360) or (solar_azimuth_angle == 0):
-    #     return _make_shade_mask_from_horizontal_wave_front(
-    #         dem_with_added_gradient,
-    #         -solar_azimuth_angle % 360,
-    #     )
-    raise ValueError(f"Solar azimuth angle {solar_azimuth_angle} is not supported")
 
 
 def _make_shade_mask_from_horizontal_wave_front(
