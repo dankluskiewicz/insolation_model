@@ -3,17 +3,15 @@ import numpy as np
 from insolation_model.geometry.topography import (
     dem_to_gradient,
     dem_to_surface_normal_unit_direction,
-    _gradient_vector_to_surface_normal_unit_direction,
 )
 from tests.conftest import make_dem_with_gradients
 
 
 @pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
 @pytest.mark.parametrize("prescribed_grad_y", [0, 1, -1, 3])
-@pytest.mark.parametrize("dx", [1, 2])
-@pytest.mark.parametrize("dy", [1, 4])
-def test_dem_to_gradient(prescribed_grad_x, prescribed_grad_y, dx, dy):
-    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dy)
+@pytest.mark.parametrize("dx", [1, 2, 4])
+def test_dem_to_gradient(prescribed_grad_x, prescribed_grad_y, dx):
+    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dx)
     measured_grad_x, measured_grad_y = dem_to_gradient(dem)
     assert np.isclose(measured_grad_x, prescribed_grad_x).all()
     assert np.isclose(measured_grad_y, prescribed_grad_y).all()
@@ -26,34 +24,9 @@ def _gradients_to_grad_vector(grad_x, grad_y):
 
 @pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
 @pytest.mark.parametrize("prescribed_grad_y", [0, 1, -1, 3])
-def test_gradient_vector_to_surface_normal_unit_direction(
-    prescribed_grad_x, prescribed_grad_y
-):
-    unit_norm = np.array(
-        _gradient_vector_to_surface_normal_unit_direction(
-            prescribed_grad_x, prescribed_grad_y
-        )
-    )
-    # need a vector that points along the surface gradient
-    grad_vector = _gradients_to_grad_vector(prescribed_grad_x, prescribed_grad_y)
-    assert np.isclose(np.linalg.norm(unit_norm), 1.0, atol=1e-5).all(), (
-        "The surface normal unit direction is not a unit vector"
-    )
-    assert np.isclose(np.dot(unit_norm, grad_vector), 0.0, atol=1e-5).all(), (
-        "The surface normal unit direction is not perpendicular to the gradient. \n"
-        f"{grad_vector=}\n"
-        f"unit_norm: {unit_norm}\n"
-    )
-
-
-@pytest.mark.parametrize("prescribed_grad_x", [0, 1, -1, 3])
-@pytest.mark.parametrize("prescribed_grad_y", [0, 1, -1, 3])
 @pytest.mark.parametrize("dx", [1, 2])
-@pytest.mark.parametrize("dy", [1, 4])
-def test_dem_to_surface_normal_unit_direction(
-    prescribed_grad_x, prescribed_grad_y, dx, dy
-):
-    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dy)
+def test_dem_to_surface_normal_unit_direction(prescribed_grad_x, prescribed_grad_y, dx):
+    dem = make_dem_with_gradients(prescribed_grad_x, prescribed_grad_y, dx, dx)
     unit_norm = dem_to_surface_normal_unit_direction(dem)
     # need an array of vectors that point along the surface gradient
     # I'm using caps to denote the gradient array that I infer form the DEM, as opposed to the prescribed gradient values.
@@ -79,3 +52,19 @@ def test_dem_to_surface_normal_unit_direction(
     assert (np.sign(unit_norm[1]) == -np.sign(prescribed_grad_y)).all(), (
         "The surface normal unit direction is not pointing in the correct y direction."
     )
+
+
+def test_dem_to_surface_normal_unit_direction_does_not_integer_truncate_when_first_pixel_flat():
+    """Regression test: when the first pixel has zero gradient, we must not infer int outputs and truncate."""
+    dem = make_dem_with_gradients(
+        grad_x=0.5, grad_y=-0.25, dx=1.0, dy=1.0, n_rows=6, n_cols=7
+    )
+    dem.arr[0, 0] = 0.0
+    dem.arr[0, 1] = 0.0
+    dem.arr[1, 0] = 0.0  # make a small flat corner
+
+    unit_norm = dem_to_surface_normal_unit_direction(dem)
+    assert unit_norm.dtype.kind == "f"
+    # Away from the forced-flat corner, x/y components should be non-zero for non-zero gradients.
+    assert np.any(np.abs(unit_norm[0, 2:, 2:]) > 0)
+    assert np.any(np.abs(unit_norm[1, 2:, 2:]) > 0)

@@ -9,29 +9,14 @@ def dem_to_gradient(dem: Raster) -> np.ndarray:
 
 def dem_to_surface_normal_unit_direction(dem: Raster) -> np.ndarray:
     """Convert a DEM raster to an array of  unit vectors that are perpendicular to the surface."""
-    vectorized_gradient_function = np.vectorize(
-        _gradient_vector_to_surface_normal_unit_direction
-    )
-    return np.array(vectorized_gradient_function(*dem_to_gradient(dem)))
-
-
-def _gradient_vector_to_surface_normal_unit_direction(
-    grad_x: float, grad_y: float
-) -> tuple[float, float, float]:
-    """Find the unit vector that is perpendicular to the surface gradient at a single point."""
-    slope = np.arctan(np.hypot(grad_x, grad_y))
-    norm_horizontal_component = np.sin(slope)
-    return (
-        -np.sign(grad_x)
-        * np.sqrt(norm_horizontal_component**2 / (1 + (grad_y / grad_x) ** 2))
-        if grad_x != 0
-        else 0,
-        -np.sign(grad_y)
-        * np.sqrt(norm_horizontal_component**2 / (1 + (grad_x / grad_y) ** 2))
-        if grad_y != 0
-        else 0,
-        np.cos(slope),
-    )  # norm_x, norm_y, norm_z
+    grad_x, grad_y = dem_to_gradient(dem)
+    # For a surface z = f(x, y), an (upward-pointing) normal direction is (-dz/dx, -dz/dy, 1).
+    # Normalize to a unit vector at each pixel.
+    denom = np.sqrt(1.0 + grad_x**2 + grad_y**2)
+    normal_x = -grad_x / denom
+    normal_y = -grad_y / denom
+    normal_z = 1.0 / denom
+    return np.stack([normal_x, normal_y, normal_z])
 
 
 def _get_dot_product_of_surface_normal_and_solar_unit_directions(
@@ -96,22 +81,3 @@ def dem_to_hillshade(
         )
     )
     return dem.with_array(surface_angle_coefficient)
-
-
-def dem_to_insolation_coefficient(
-    dem: Raster,
-    solar_azimuth: float = 315,
-    solar_elevation: float = 45,
-) -> Raster:
-    """Compute the coefficient that corrects solar flux for the angle of the ground surface.
-
-    Returns an raster whose values are in [0, 1]. 0 is shaded. 1 is fully illuminated.
-    Shape (n_rows, n_cols)
-
-    Args:
-        dem: Digital elevation model raster.
-        solar_azimuth: Solar azimuth angle in degrees clockwise from north.
-        solar_elevation: Solar elevation angle in degrees above the horizon.
-    """
-    hillshade = dem_to_hillshade(dem, solar_azimuth, solar_elevation)
-    return hillshade.with_array(np.maximum(0, hillshade.arr))

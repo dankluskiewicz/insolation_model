@@ -45,6 +45,7 @@ convention = "google"
 # McCabe complexity (`C901`) by default.
 select = ["E4", "E7", "E9", "F", "C", "W", "FURB", "D"]
 ignore = [
+  "E741",  # ambiguous variable name (e.g. l, O, I)
   "D100",  # missing docstring in public module
   "D101",  # missing docstring in public class
   "D102",  # missing docstring in public method

@@ -13,6 +13,8 @@ class Raster:
         self.arr = arr.astype(float)
         self.transform = transform
         self.crs = crs
+        if self.dx != self.dy:
+            raise ValueError("this package has only been tested for square pixels")
 
     @property
     def dx(self) -> float:
@@ -39,21 +41,27 @@ class Raster:
     @classmethod
     def from_tif(cls, path: Path) -> "Raster":
         with rasterio.open(path) as src:
-            arr = src.read()
+            # Read as a masked array so dataset nodata gets converted to a mask.
+            arr = src.read(masked=True)
             if arr.ndim > 2:
                 if arr.shape[0] == 1:
                     arr = arr[0, :, :]
                 else:
                     raise Exception("This class can't handle multiband data")
 
+            # Convert nodata mask to NaNs for downstream numeric ops.
+            if isinstance(arr, np.ma.MaskedArray):
+                arr = arr.astype(float).filled(np.nan)
+
             return cls(
                 arr=arr,
                 transform=src.transform,
-                crs=src.crs,
+                crs=_make_pyproj_crs(src.crs),
             )
 
     def reproject(self, new_crs: str | pyproj.CRS, dx=None) -> "Raster":
         """Reproject self to a new CRS with similar spatial resolution and coverage."""
+        new_crs = _make_pyproj_crs(new_crs)
         new_transform, new_width, new_height = warp.calculate_default_transform(
             self.crs,
             new_crs,
@@ -61,11 +69,11 @@ class Raster:
             self.arr.shape[0],
             *self.bounds,
         )
-        new_crs = _make_pyproj_crs(new_crs)
         if new_width is None or new_height is None:
             raise ValueError("Could not calculate new raster dimensions")
 
-        new_arr = np.empty((new_height, new_width))
+        new_arr = np.full((new_height, new_width), np.nan, dtype=float)
+        src_nodata = np.nan if np.isnan(self.arr).any() else None
 
         warp.reproject(
             self.arr,
@@ -74,7 +82,10 @@ class Raster:
             dst_transform=new_transform,
             src_crs=self.crs,
             dst_crs=new_crs,
-            resampling=warp.Resampling.nearest,
+            resampling=warp.Resampling.bilinear,
+            src_nodata=src_nodata,
+            dst_nodata=np.nan,
+            init_dest_nodata=True,
         )
 
         return Raster(new_arr, new_transform, new_crs)
