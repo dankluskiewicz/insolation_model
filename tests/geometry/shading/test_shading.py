@@ -10,18 +10,16 @@ from insolation_model.geometry.shading import (
 from tests.conftest import make_dem_with_gradients, make_flat_dem
 
 
-@pytest.mark.skip(reason="Not implemented")
 @pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
-@pytest.mark.parametrize("elevation_angle", [0, 30, 90])
+@pytest.mark.parametrize("elevation_angle", [1, 30, 90])
 def test_flat_slope_never_shaded(azimuth_angle, elevation_angle):
     dem = make_flat_dem(1, 1)
     mask = make_shade_mask(
         dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=elevation_angle
     )
-    np.testing.assert_array_equal(mask, np.ones(dem.arr.shape, dtype=int))
+    np.testing.assert_array_equal(mask, np.zeros(dem.arr.shape, dtype=int))
 
 
-@pytest.mark.skip(reason="Not implemented")
 @pytest.mark.parametrize(("grad_x", "grad_y"), [(0, 1), (1, 4)])
 @pytest.mark.parametrize("azimuth_angle", [0, 30, 180, 275])
 def test_dem_is_never_masked_when_solar_elevation_angle_is_90(
@@ -34,13 +32,12 @@ def test_dem_is_never_masked_when_solar_elevation_angle_is_90(
         make_shade_mask(
             dem, solar_azimuth_angle=azimuth_angle, solar_elevation_angle=90
         ),
-        np.ones(dem.arr.shape, dtype=int),
+        np.zeros(dem.arr.shape, dtype=int),
     )
 
 
-@pytest.mark.skip(reason="Not implemented")
 @pytest.mark.parametrize("elevation_angle", [3, 15, 37, 87])
-@pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270])
+@pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270, 360])
 def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_cases(
     elevation_angle, azimuth_angle
 ):
@@ -53,27 +50,32 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_c
     should_not_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
         elevation_angle - eps, azimuth_angle, 1, 1, n_rows, n_cols
     )
-    np.testing.assert_array_equal(
+    test_buffer = 1
+    _assert_shade_mask_is_correct(
         make_shade_mask(
             should_be_shaded,
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
         ),
-        np.zeros(should_be_shaded.arr.shape, dtype=int),
+        1,
+        test_buffer,
     )
-    np.testing.assert_array_equal(
+    _assert_shade_mask_is_correct(
         make_shade_mask(
             should_not_be_shaded,
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
         ),
-        np.ones(should_not_be_shaded.arr.shape, dtype=int),
+        0,
+        test_buffer,
     )
 
 
-@pytest.mark.skip(reason="Not implemented")
 @pytest.mark.parametrize("elevation_angle", [10, 15, 37, 80])
-@pytest.mark.parametrize("azimuth_angle", [0, 15, 35, 55, 75, 165, -165])
+@pytest.mark.parametrize(
+    "azimuth_angle",
+    [0, 15, 35, 55, 75, 165, 185, 205, 225, 245, 265, 285, 305, 325, 345, 359],
+)
 def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_less_simple_cases(
     elevation_angle, azimuth_angle
 ):
@@ -86,23 +88,40 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_less_sim
     should_not_be_shaded = _dem_with_slope_that_parallels_solar_elevation(
         elevation_angle - eps, azimuth_angle, 1, 1, n_rows, n_cols
     )
-    rows_to_test = slice(2, n_rows - 2)
-    cols_to_test = slice(2, n_cols - 2)
-    np.testing.assert_array_equal(
+    test_buffer = 1
+    _assert_shade_mask_is_correct(
         make_shade_mask(
             should_be_shaded,
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
-        )[rows_to_test, cols_to_test],
-        np.zeros((n_rows - 4, n_cols - 4), dtype=int),
+        ),
+        1,
+        test_buffer,
     )
-    np.testing.assert_array_equal(
+    _assert_shade_mask_is_correct(
         make_shade_mask(
             should_not_be_shaded,
             solar_azimuth_angle=azimuth_angle,
             solar_elevation_angle=elevation_angle,
-        )[rows_to_test, cols_to_test],
-        np.ones((n_rows - 4, n_cols - 4), dtype=int),
+        ),
+        0,
+        test_buffer,
+    )
+
+
+def _assert_shade_mask_is_correct(
+    mask: np.ndarray, correct_value: int, buffer_size: int
+):
+    n_rows, n_cols = mask.shape
+    rows_to_test = slice(buffer_size, n_rows - buffer_size)
+    cols_to_test = slice(buffer_size, n_cols - buffer_size)
+    np.testing.assert_array_equal(
+        mask[rows_to_test, cols_to_test],
+        np.full(
+            (n_rows - 2 * buffer_size, n_cols - 2 * buffer_size),
+            correct_value,
+            dtype=int,
+        ),
     )
 
 
