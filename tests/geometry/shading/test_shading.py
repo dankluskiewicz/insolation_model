@@ -4,7 +4,6 @@ import numpy as np
 from insolation_model.raster import Raster
 from insolation_model.geometry.shading import (
     make_shade_mask,
-    _fill_nans_with_nearest_neighbor,
     _gradient_for_slope_that_parallels_solar_elevation,
 )
 from tests.conftest import make_dem_with_gradients, make_flat_dem
@@ -141,39 +140,3 @@ def _dem_with_slope_that_parallels_solar_elevation(
     return make_dem_with_gradients(
         grad_x, grad_y, dx, dy, n_rows, n_cols, origin_x, origin_y
     )
-
-
-@pytest.mark.skip(reason="Not implemented")
-@pytest.mark.parametrize("n_rows", [3, 9])
-@pytest.mark.parametrize("n_cols", [1, 6])
-def test_fill_nans_with_nearest_neighbor_on_mostly_empty_array(n_rows, n_cols):
-    arr = np.nan * np.ones((n_rows, n_cols))
-    arr[0, 0] = 4
-    new_arr = _fill_nans_with_nearest_neighbor(arr)
-    assert (new_arr == 4).all()
-
-
-@pytest.mark.skip(reason="Not implemented")
-@pytest.mark.parametrize(
-    "nan_indices",
-    [
-        np.array([[0, 0], [1, 1], [3, 2]]),
-        np.array([[0, 0], [1, 4], [4, 4]]),
-    ],
-)
-def test_fill_nans_with_nearest_neighbor_on_mostly_filled_array(nan_indices):
-    arr = np.ones((5, 5))
-    arr[nan_indices] = np.nan
-    new_arr = _fill_nans_with_nearest_neighbor(arr)
-    assert (new_arr == 1).all()
-
-
-@pytest.mark.skip(reason="Not implemented")
-@pytest.mark.parametrize("nan_i", range(5))
-def test_fill_nans_with_nearest_neighbor_actually_fills_with_nearest_neighbor(nan_i):
-    arr = np.arange(10).astype(float)
-    arr[nan_i] = np.nan
-    new_arr = _fill_nans_with_nearest_neighbor(arr)
-    assert new_arr[nan_i] in [arr[nan_i - 1], arr[nan_i + 1]]
-    arr[nan_i] = new_arr[nan_i]
-    assert (new_arr == arr).all(), f"{new_arr=}, {arr=}"
