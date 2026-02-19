@@ -313,8 +313,8 @@ def _rotate_array(arr: np.ndarray, angle: float) -> np.ndarray:
     if angle == 0:
         return arr
     elif angle == 90:
-        return arr.T[::-1]
+        return arr.T[:, ::-1]
     elif angle == 180:
         return arr[::-1, ::-1]
     elif angle == 270:
-        return arr.T[:, ::-1]
+        return arr.T[::-1]
