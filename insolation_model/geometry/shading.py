@@ -14,12 +14,24 @@ _front_spacing = 1 / 2.5
 def make_shade_mask(
     dem: Raster, solar_azimuth_angle: float, solar_elevation_angle: float
 ) -> np.ndarray:
+    """Make a shade mask for a DEM.
+
+    Args:
+        dem: The DEM to make a shade mask for.
+        solar_azimuth_angle: The azimuth angle of the sun in degrees clockwise from North.
+        solar_elevation_angle: The elevation angle of the sun in degrees.
+
+    Returns:
+        A shade mask where 1 indicates shaded and 0 indicates not shaded.
+    """
+    if solar_elevation_angle == 0:
+        return np.ones(dem.arr.shape, dtype=int)
+    if solar_elevation_angle == 90:
+        return np.zeros(dem.arr.shape, dtype=int)
     if not (0 <= solar_elevation_angle <= 90):
         raise ValueError("Solar elevation angle must be between 0 and 90 degrees")
     if not (0 <= solar_azimuth_angle <= 360):
         raise ValueError("Solar azimuth angle must be between 0 and 360 degrees")
-    if solar_elevation_angle == 90:
-        return np.zeros(dem.arr.shape, dtype=int)
     dem_with_added_gradient = _add_gradient_to_dem(
         dem,
         *(
