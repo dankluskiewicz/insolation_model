@@ -249,7 +249,7 @@ def _get_array_values_on_front(
         & (Fi_indices < n_rows)
         & (Fj_indices < n_cols)
     )
-    Fvalues = 0 * Fi - 9999
+    Fvalues = np.full(Fi.shape, np.nan)
     Fvalues[valid_indices_on_front] = arr[
         Fi_indices[valid_indices_on_front], Fj_indices[valid_indices_on_front]
     ]
