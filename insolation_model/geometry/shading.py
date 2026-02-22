@@ -15,6 +15,13 @@ def make_shade_mask(
 ) -> np.ndarray:
     """Make a shade mask for a DEM.
 
+    This algorithm works by creating a dense grid that is aligned with the solar azimuth angle,
+    and then computing cumulative DEM maxima for a wave font that travels along this grid. Rather than
+    account for the solar elevation angle in the wave front, this algorithm modifies the DEM by
+    adding grdient in the direction opposite the solar azimuthm, whose magnitude is proportional to
+    the sine of the solar elevation angle. Then, the shading mask is computed from this modified DEM
+    for a sun with zero elevation angle.
+
     Args:
         dem: The DEM to make a shade mask for.
         solar_azimuth_angle: The azimuth angle of the sun in degrees clockwise from North.
@@ -62,7 +69,8 @@ def _make_shade_mask_from_horizontal_wave_front(
     zero elevation angle and at a solar azimuth angle -wave_front_theta.
     wave_front_theta is the angle of the sun in degrees counterclockwise from North,
     which happens to be opposite the convention I've adopted for solar azimuth angles
-    called "solar_azimuth_angle".
+    called "solar_azimuth_angle". This is an unfortunate consequence of my deriving the
+    wave-front algorithm with backwards angular coordinates in mind. Sorry.
 
     This function exists because it's possible to compute shading for sun with a nonzero
     elevation angle by manipulating the gradient of a DEM in a direction parallel to the
