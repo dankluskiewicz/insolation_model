@@ -56,9 +56,7 @@ def dem_to_hillshade(
     solar_azimuth: float = 315,
     solar_elevation: float = 45,
 ) -> Raster:
-    """Compute the coefficient that corrects solar flux for the angle of the ground surface.
-
-    This is the dot product of the surface normal unit direction and the solar unit direction.
+    """This is the dot product of the surface normal unit direction and the solar unit direction.
     It's similar to, but not exactly the conventional interpretation of "shaded relief".
     Saturate from below at 0 to use this as a coefficient that corrects solar flux for the angle of the ground surface,
     or use it directly to for shaded relief visuals.
