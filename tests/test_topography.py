@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from insolation_model.geometry.topography import (
+from insolation_model.topography import (
     dem_to_gradient,
     dem_to_surface_normal_unit_direction,
 )

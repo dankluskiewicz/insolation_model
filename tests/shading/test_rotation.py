@@ -1,5 +1,5 @@
 import numpy as np
-from insolation_model.geometry.shading import _rotate_array
+from insolation_model.shading import _rotate_array
 
 
 def test_rotate_array():

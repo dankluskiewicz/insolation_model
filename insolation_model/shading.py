@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..raster import Raster
+from insolation_model.raster import Raster
 
 
 ## According to my empirical tests, these parameters are small enough to prevent most

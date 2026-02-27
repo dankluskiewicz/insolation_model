@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 
 from insolation_model.raster import Raster
-from insolation_model.geometry.shading import (
+from insolation_model.shading import (
     make_shade_mask,
     _gradient_for_slope_that_parallels_solar_elevation,
 )

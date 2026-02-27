@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from insolation_model.geometry.solar import (
+from insolation_model.solar import (
     _earth_axial_tilt,
     _day_of_winter_solstice,
     get_fractional_year,

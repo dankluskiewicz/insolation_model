@@ -1,8 +1,8 @@
 import pytest
 import numpy as np
 
-from insolation_model.geometry.shading import _add_gradient_to_dem
-from insolation_model.geometry.topography import dem_to_gradient
+from insolation_model.shading import _add_gradient_to_dem
+from insolation_model.topography import dem_to_gradient
 from tests.conftest import make_flat_dem
 
 

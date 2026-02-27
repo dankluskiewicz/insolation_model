@@ -1,5 +1,5 @@
 import numpy as np
-from ..raster import Raster
+from insolation_model.raster import Raster
 
 
 def dem_to_gradient(dem: Raster) -> np.ndarray:

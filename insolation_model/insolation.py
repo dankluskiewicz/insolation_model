@@ -1,8 +1,8 @@
 import numpy as np
 
 from insolation_model.raster import Raster
-from insolation_model.geometry.topography import dem_to_hillshade
-from insolation_model.geometry.shading import make_shade_mask
+from insolation_model.topography import dem_to_hillshade
+from insolation_model.shading import make_shade_mask
 
 
 def _dem_to_topographic_flux_coefficient(

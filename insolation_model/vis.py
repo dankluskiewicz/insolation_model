@@ -1,7 +1,7 @@
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 from insolation_model.raster import Raster
-from insolation_model.geometry.topography import dem_to_hillshade
+from insolation_model.topography import dem_to_hillshade
 
 
 def raster(

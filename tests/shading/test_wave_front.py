@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from insolation_model.geometry.shading import (
+from insolation_model.shading import (
     _make_wave_front,
     _front_spacing,
     _packet_spacing,
