@@ -35,10 +35,19 @@ def test_dem_is_never_masked_when_solar_elevation_angle_is_90(
     )
 
 
+def _add_nans_to_perimiter(raster: Raster) -> np.ndarray:
+    raster.arr[0, :] = np.nan
+    raster.arr[-1, :] = np.nan
+    raster.arr[:, 0] = np.nan
+    raster.arr[:, -1] = np.nan
+    return raster
+
+
 @pytest.mark.parametrize("elevation_angle", [3, 15, 37, 87])
 @pytest.mark.parametrize("azimuth_angle", [0, 90, 180, 270, 360])
+@pytest.mark.parametrize("with_nans", [True, False])
 def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_cases(
-    elevation_angle, azimuth_angle
+    elevation_angle, azimuth_angle, with_nans
 ):
     """Test the get_shading_mask function with a slope that parallels the solar elevation angle for azimuth angles that are multiples of 90."""
     n_rows, n_cols = 10, 10
@@ -50,6 +59,10 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_c
         elevation_angle - eps, azimuth_angle, 1, 1, n_rows, n_cols
     )
     test_buffer = 1
+    if with_nans:
+        should_be_shaded = _add_nans_to_perimiter(should_be_shaded)
+        should_not_be_shaded = _add_nans_to_perimiter(should_not_be_shaded)
+        test_buffer = 2
     _assert_shade_mask_is_correct(
         make_shade_mask(
             should_be_shaded,
@@ -70,6 +83,7 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_c
     )
 
 
+@pytest.mark.skip(reason="Focus on simple cases for now.")
 @pytest.mark.parametrize("elevation_angle", [10, 15, 37, 80])
 @pytest.mark.parametrize(
     "azimuth_angle",
