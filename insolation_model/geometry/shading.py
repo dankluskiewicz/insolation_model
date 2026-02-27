@@ -88,7 +88,10 @@ def _make_shade_mask_from_horizontal_wave_front(
     Fi_indices, Fj_indices, Fvalues, valid_indices_on_front = (
         _get_array_values_on_front(arr, Fi, Fj)
     )
-    F_cummax = np.maximum.accumulate(Fvalues, axis=0)
+    F_cummax = np.maximum.accumulate(
+        np.nan_to_num(Fvalues, nan=np.nanmin(Fvalues)),
+        axis=0,
+    )
     F_mask = (Fvalues < F_cummax).astype(int)
     front_vector_i = Fi_indices[valid_indices_on_front]
     front_vector_j = Fj_indices[valid_indices_on_front]
