@@ -83,7 +83,6 @@ def test_get_shading_mask_with_slope_that_parallels_solar_elevation_for_simple_c
     )
 
 
-@pytest.mark.skip(reason="Focus on simple cases for now.")
 @pytest.mark.parametrize("elevation_angle", [10, 15, 37, 80])
 @pytest.mark.parametrize(
     "azimuth_angle",
